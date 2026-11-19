@@ -1,0 +1,115 @@
+# Publica el backend en el servidor cuando las pruebas pasan en develop.
+# 1. Espera a que el flujo "Pruebas" termine bien sobre un cambio que entró a develop.
+# 2. Construye la imagen y la sube a Amazon ECR, etiquetada con el commit y con latest.
+# 3. Le pide al servidor, por AWS Systems Manager, que baje esa imagen y reinicie solo el backend.
+# 4. Comprueba que la API responde por HTTPS.
+# No guarda claves: GitHub entra a AWS con OIDC y un rol que solo acepta este repositorio y la rama develop.
+name: Despliegue
+
+on:
+  workflow_run:
+    workflows: [Pruebas]
+    types: [completed]
+    branches: [develop]
+  # Permite volver a publicar a mano el último develop desde la pestaña Actions.
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+# Un despliegue a la vez; si entran dos cambios seguidos, el segundo espera al primero.
+concurrency:
+  group: despliegue-produccion
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: us-east-2
+  ROL_AWS: arn:aws:iam::816026730908:role/sga-github-despliegue
+  REGISTRO: 816026730908.dkr.ecr.us-east-2.amazonaws.com
+  REPOSITORIO: sga-backend
+  INSTANCIA: i-05bfb28b924191713
+  URL_API: https://sga-api.albas.dev
+
+jobs:
+  publicar:
+    # Solo si las pruebas pasaron sobre un push a develop (no sobre un PR que apunta a develop).
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - name: Etiqueta de la imagen
+        id: etiqueta
+        run: |
+          echo "commit=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+          echo "imagen=$REGISTRO/$REPOSITORIO:$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Entrar a AWS con OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.ROL_AWS }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Entrar a ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Construir y subir la imagen
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ steps.etiqueta.outputs.imagen }}
+            ${{ env.REGISTRO }}/${{ env.REPOSITORIO }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Publicar en el servidor
+        env:
+          IMAGEN: ${{ steps.etiqueta.outputs.imagen }}
+        run: |
+          # Fija la imagen nueva en el .env del servidor y reinicia solo el backend; la base, la IA y Caddy siguen igual.
+          jq -n --arg img "$IMAGEN" '{commands: [
+            "set -e",
+            "cd /home/ubuntu/sga",
+            ("sed -i \"s#^IMAGEN_BACKEND=.*#IMAGEN_BACKEND=" + $img + "#\" .env"),
+            "docker compose pull backend",
+            "docker compose up -d backend",
+            "docker image prune -f",
+            "docker compose ps backend"
+          ]}' > parametros.json
+          ID=$(aws ssm send-command \
+            --instance-ids "$INSTANCIA" \
+            --document-name AWS-RunShellScript \
+            --comment "Despliegue ${{ steps.etiqueta.outputs.commit }}" \
+            --parameters file://parametros.json \
+            --query Command.CommandId --output text)
+          echo "Orden enviada al servidor: $ID"
+          for i in $(seq 1 60); do
+            ESTADO=$(aws ssm get-command-invocation --command-id "$ID" --instance-id "$INSTANCIA" --query Status --output text 2>/dev/null || echo Pending)
+            case "$ESTADO" in Pending|InProgress|Delayed) sleep 5 ;; *) break ;; esac
+          done
+          aws ssm get-command-invocation --command-id "$ID" --instance-id "$INSTANCIA" \
+            --query '[StandardOutputContent, StandardErrorContent]' --output text
+          echo "Resultado: $ESTADO"
+          test "$ESTADO" = "Success"
+
+      - name: Comprobar que la API responde
+        run: |
+          # Sin credenciales, el ingreso del administrador tiene que responder 401: la API está arriba y protegida.
+          for i in $(seq 1 30); do
+            CODIGO=$(curl -s -o /dev/null -w '%{http_code}' -X POST -H 'Content-Type: application/json' \
+              -d '{"correo":"verificacion@despliegue","clave":"x"}' "$URL_API/auth/admin" || true)
+            if [ "$CODIGO" = "401" ]; then echo "API en línea con ${{ steps.etiqueta.outputs.commit }}"; exit 0; fi
+            echo "Intento $i: respondió $CODIGO, espero 5 s"
+            sleep 5
+          done
+          echo "La API no respondió 401 después de 150 s"
+          exit 1
