@@ -23,20 +23,24 @@ concurrency:
   group: despliegue-produccion
   cancel-in-progress: false
 
+# Datos del servidor: variables del repositorio (Settings → Secrets and variables → Actions → Variables).
+# No son secretos, pero cambian con cada servidor; así el mismo flujo sirve para cualquier cuenta de AWS.
 env:
-  AWS_REGION: us-east-2
-  ROL_AWS: arn:aws:iam::816026730908:role/sga-github-despliegue
-  REGISTRO: 816026730908.dkr.ecr.us-east-2.amazonaws.com
-  REPOSITORIO: sga-backend
-  INSTANCIA: i-05bfb28b924191713
-  URL_API: https://sga-api.albas.dev
+  AWS_REGION: ${{ vars.AWS_REGION }}
+  ROL_AWS: ${{ vars.ROL_AWS }}
+  REGISTRO: ${{ vars.REGISTRO }}
+  REPOSITORIO: ${{ vars.REPOSITORIO }}
+  INSTANCIA: ${{ vars.INSTANCIA }}
+  URL_API: ${{ vars.URL_API }}
 
 jobs:
   publicar:
-    # Solo si las pruebas pasaron sobre un push a develop (no sobre un PR que apunta a develop).
+    # Solo si las pruebas pasaron sobre un push a develop (no sobre un PR que apunta a develop),
+    # y solo cuando el servidor ya está configurado en las variables.
     if: >-
+      vars.INSTANCIA != '' && (
       github.event_name == 'workflow_dispatch' ||
-      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
+      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'))
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
