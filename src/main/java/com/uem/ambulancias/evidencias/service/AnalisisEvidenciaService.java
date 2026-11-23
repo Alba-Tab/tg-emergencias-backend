@@ -4,6 +4,9 @@ import java.time.Instant;
 import java.util.Optional;
 
 import com.uem.ambulancias.comun.error.NoEncontradoException;
+import com.uem.ambulancias.emergencias.domain.OrigenDelEvento;
+import com.uem.ambulancias.emergencias.domain.TipoEventoDelCaso;
+import com.uem.ambulancias.emergencias.service.BitacoraDelCaso;
 import com.uem.ambulancias.evidencias.domain.AnalisisEvidencia;
 import com.uem.ambulancias.evidencias.domain.EstadoEvidencia;
 import com.uem.ambulancias.evidencias.domain.Evidencia;
@@ -32,6 +35,7 @@ public class AnalisisEvidenciaService {
 	private final AlmacenDeEvidencias almacen;
 	private final EvidenciaProperties config;
 	private final ColaDeTrabajosIa cola;
+	private final BitacoraDelCaso bitacora;
 
 	/**
 	 * El pedido con una URL de lectura recién firmada, que dura más que la llamada más larga. Vacío si la evidencia ya
@@ -77,8 +81,15 @@ public class AnalisisEvidenciaService {
 		Evidencia evidencia = evidencias.buscarParaActualizar(evidenciaId)
 				.orElseThrow(() -> new NoEncontradoException("No existe la evidencia " + evidenciaId + "."));
 		if (evidencia.getEstado() == EstadoEvidencia.SUBIDA && !analisis.existsByEvidenciaId(evidenciaId)) {
-			analisis.save(AnalisisEvidencia.registrar(evidencia, trabajo.getReferencia(), recibido, ahora));
+			AnalisisEvidencia guardado = analisis
+					.save(AnalisisEvidencia.registrar(evidencia, trabajo.getReferencia(), recibido, ahora));
 			evidencia.marcarAnalizada(ahora);
+			// El análisis ya queda guardado entero en su tabla: la bitácora solo anota que llegó y dónde está.
+			bitacora.anotar(trabajo.getIncidente(), evidencia.getAlerta(), TipoEventoDelCaso.EVIDENCIA_ANALIZADA,
+					OrigenDelEvento.ANALISIS, ahora, BitacoraDelCaso.datos(
+							"evidenciaId", evidenciaId,
+							"analisisId", guardado.getId(),
+							"modalidad", recibido.modalidad()));
 		}
 		trabajo.completar(ahora);
 		cola.pedirResumen(trabajo.getIncidente().getId());
