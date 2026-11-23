@@ -5,6 +5,7 @@ import java.util.Map;
 import java.util.stream.Stream;
 
 import com.jayway.jsonpath.JsonPath;
+import com.jayway.jsonpath.PathNotFoundException;
 
 /** Arma los cuerpos de las peticiones y lee las respuestas sin depender de cómo serializa la app. */
 public final class Json {
@@ -44,6 +45,15 @@ public final class Json {
 
 	public static <T> T leer(String json, String ruta) {
 		return JsonPath.read(json, ruta);
+	}
+
+	/** El texto de esa ruta, o {@code null} si el JSON no la tiene. */
+	public static String textoOpcional(String json, String ruta) {
+		try {
+			return JsonPath.read(json, ruta);
+		} catch (PathNotFoundException e) {
+			return null;
+		}
 	}
 
 	private static String valor(Object valor) {
