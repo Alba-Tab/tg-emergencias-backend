@@ -87,6 +87,19 @@ public interface IncidenteRepository extends JpaRepository<Incidente, Long> {
 		return buscarIdsQuePuedenNecesitarUnidadCon(EstadoAtencion.ACTIVOS);
 	}
 
+	/** Los incidentes abiertos, del más viejo al más nuevo. */
+	@Query("select i from Incidente i where i.estado in ('ACTIVO', 'EN_ATENCION') order by i.fechaHoraCreacion, i.id")
+	List<Incidente> buscarAbiertos(Pageable limite);
+
+	/** Los incidentes ya cerrados de ese tipo de suceso, del más reciente al más viejo, sin contar a uno. */
+	@Query("""
+			select i from Incidente i
+			where i.tipoSuceso = :tipoSuceso and i.id <> :excluido and i.estado not in ('ACTIVO', 'EN_ATENCION')
+			order by i.fechaHoraCreacion desc, i.id desc
+			""")
+	List<Incidente> buscarCerradosDelTipo(@Param("tipoSuceso") String tipoSuceso, @Param("excluido") Long excluido,
+			Pageable limite);
+
 	default List<Incidente> buscarSinCubrir() {
 		return buscarActivosSinAtencionEn(EstadoAtencion.ACTIVOS);
 	}

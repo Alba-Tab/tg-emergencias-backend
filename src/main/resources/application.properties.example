@@ -105,6 +105,13 @@ sga.derivacion.segundos-del-testigo=45
 # Cada cuantos segundos corre el barrido que da por vencidas las derivaciones sin respuesta.
 sga.derivacion.barrido-seg=5
 
+# Herramientas del agente (servidor MCP en /mcp). El servicio de IA se presenta con este token: es su
+# AI_BACKEND_MCP_TOKEN. Vacio, la ruta no existe. Nunca se versiona.
+sga.agente.token=
+# Cuantos casos anteriores devuelve la busqueda de casos parecidos, y hasta cuantas horas de traslados proximos.
+sga.agente.casos-parecidos=5
+sga.agente.horas-de-traslados=24
+
 # Evidencias que el ciudadano adjunta a su alerta (foto, audio o video). Todos tienen valor por defecto.
 # Cuantas puede adjuntar a una misma alerta.
 sga.evidencias.maximo-por-alerta=5
