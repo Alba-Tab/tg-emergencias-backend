@@ -100,6 +100,7 @@ public class SecurityConfig {
 								"/traslados/*/devolver", "/traslados/*/familia-avisada")
 						.hasRole(ADMIN)
 						.requestMatchers("/operacion/**", "/operacion").hasRole(ADMIN)
+						.requestMatchers("/despacho/**").hasRole(ADMIN)
 						.requestMatchers("/reportes/**").hasRole(ADMIN)
 						.requestMatchers("/cobros", "/cobros/**", "/tarifas", "/tarifas/**").hasRole(ADMIN)
 						.requestMatchers("/ambulancias/**", "/asignaciones/**", "/paramedicos/**").hasRole(ADMIN)
