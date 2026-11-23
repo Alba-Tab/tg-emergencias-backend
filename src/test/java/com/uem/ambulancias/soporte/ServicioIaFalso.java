@@ -1,8 +1,10 @@
 package com.uem.ambulancias.soporte;
 
+import java.text.Normalizer;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -21,6 +23,7 @@ import com.uem.ambulancias.evidencias.service.PedidoDeResumen;
 import com.uem.ambulancias.evidencias.service.Procedencia;
 import com.uem.ambulancias.evidencias.service.ResumenRecibido;
 import com.uem.ambulancias.evidencias.service.ServicioDeAnalisis;
+import com.uem.ambulancias.memoria.service.ModeloDeEmbeddings;
 
 /**
  * Reemplaza al microservicio de IA en las pruebas. Responde lo que la prueba le prepara: por defecto un análisis
@@ -32,7 +35,12 @@ import com.uem.ambulancias.evidencias.service.ServicioDeAnalisis;
  * <p>Y de agente razonador, que arranca apagado para que las pruebas que no lo necesitan no lo vean. Encendido y sin
  * nada preparado, no resuelve ninguna condición: todas quedan en «no se sabe».
  */
-public class ServicioIaFalso implements ServicioDeAnalisis, ModeloDeDecision, Razonador {
+public class ServicioIaFalso implements ServicioDeAnalisis, ModeloDeDecision, Razonador, ModeloDeEmbeddings {
+
+	public static final String MODELO_DE_EMBEDDINGS = "embeddings-de-prueba";
+
+	/** Tamaño de los vectores de prueba: holgado, para que dos palabras distintas casi nunca caigan juntas. */
+	private static final int DIMENSIONES = 512;
 
 	private final Map<Long, FalloDelServicioIa> fallosPorEvidencia = new ConcurrentHashMap<>();
 	private final List<PedidoDeAnalisis> analisisPedidos = new CopyOnWriteArrayList<>();
@@ -46,6 +54,9 @@ public class ServicioIaFalso implements ServicioDeAnalisis, ModeloDeDecision, Ra
 	private final Map<String, ConclusionesRecibidas.Conclusion> conclusiones = new ConcurrentHashMap<>();
 	private volatile boolean razonadorEncendido;
 	private volatile FalloDelServicioIa falloDelRazonamiento;
+	private final List<List<String>> textosEmbebidos = new CopyOnWriteArrayList<>();
+	private volatile boolean embeddingsEncendidos;
+	private volatile FalloDelServicioIa falloDeLosEmbeddings;
 
 	@Override
 	public AnalisisRecibido analizar(PedidoDeAnalisis pedido) {
@@ -184,6 +195,51 @@ public class ServicioIaFalso implements ServicioDeAnalisis, ModeloDeDecision, Ra
 		return List.copyOf(resumenesPedidos);
 	}
 
+	@Override
+	public boolean listoParaEmbeber() {
+		return embeddingsEncendidos;
+	}
+
+	/**
+	 * Como el modelo de prueba del servicio: cada palabra suma en una posición fija del vector, así que dos textos
+	 * quedan cerca solo si comparten palabras. Alcanza para probar el flujo, no entiende sinónimos.
+	 */
+	@Override
+	public VectoresRecibidos embeber(List<String> textos) {
+		textosEmbebidos.add(List.copyOf(textos));
+		if (falloDeLosEmbeddings != null) {
+			throw falloDeLosEmbeddings;
+		}
+		return new VectoresRecibidos(textos.stream().map(ServicioIaFalso::vectorDe).toList(), MODELO_DE_EMBEDDINGS);
+	}
+
+	private static float[] vectorDe(String texto) {
+		float[] vector = new float[DIMENSIONES];
+		String plano = Normalizer.normalize(texto.toLowerCase(Locale.ROOT), Normalizer.Form.NFD)
+				.replaceAll("\\p{M}", "");
+		for (String palabra : plano.split("[^a-z0-9]+")) {
+			// Las palabras muy cortas son artículos y preposiciones: están en todos los textos y no distinguen nada.
+			if (palabra.length() > 3) {
+				vector[Math.floorMod(palabra.hashCode(), DIMENSIONES)] += 1;
+			}
+		}
+		return vector;
+	}
+
+	/** Enciende la búsqueda por parecido, que arranca apagada como en el servidor. */
+	public void encenderEmbeddings() {
+		embeddingsEncendidos = true;
+	}
+
+	public void fallarEmbeddings(String codigo, FalloDelServicioIa.Desenlace desenlace) {
+		falloDeLosEmbeddings = new FalloDelServicioIa(codigo, desenlace);
+	}
+
+	/** Los textos de cada pedido de vectores, en el orden en que llegaron. */
+	public List<List<String>> textosEmbebidos() {
+		return List.copyOf(textosEmbebidos);
+	}
+
 	/** Cada prueba empieza con un servicio que responde bien y sin pedidos anotados. */
 	public void olvidar() {
 		fallosPorEvidencia.clear();
@@ -198,6 +254,9 @@ public class ServicioIaFalso implements ServicioDeAnalisis, ModeloDeDecision, Ra
 		conclusiones.clear();
 		razonadorEncendido = false;
 		falloDelRazonamiento = null;
+		textosEmbebidos.clear();
+		embeddingsEncendidos = false;
+		falloDeLosEmbeddings = null;
 	}
 
 	private static Procedencia procedencia() {
