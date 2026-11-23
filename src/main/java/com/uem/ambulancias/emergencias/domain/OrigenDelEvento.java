@@ -16,6 +16,9 @@ public enum OrigenDelEvento {
 	TRIPULACION,
 
 	/** Lo decidió el sistema siguiendo sus reglas, sin que interviniera una persona. */
-	SISTEMA
+	SISTEMA,
+
+	/** Lo decidió una persona de la central. */
+	CENTRAL
 
 }

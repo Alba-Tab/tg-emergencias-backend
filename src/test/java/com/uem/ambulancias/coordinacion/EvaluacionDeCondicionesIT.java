@@ -123,7 +123,10 @@ class EvaluacionDeCondicionesIT extends PruebaIT {
 				.andExpect(jsonPath("$[2].datos.modelo").value("decisor-de-prueba"))
 				.andExpect(jsonPath("$[2].datos.tipoDeSuceso").value(ACCIDENTE))
 				.andExpect(jsonPath("$[2].datos.veredictos[0].resultado").value("EN_DUDA"));
-		assertThat(enCola("PENDIENTE")).isZero();
+		// Queda una evaluación programada para más tarde: la que va a notar si el testigo no contestó (PB-38).
+		assertThat(enCola("PENDIENTE")).isEqualTo(1);
+		assertThat(jdbc.queryForObject("select motivo from evaluacion_del_caso where estado = 'PENDIENTE'",
+				String.class)).isEqualTo("ESPERA_DE_RESPUESTA");
 	}
 
 	@Test

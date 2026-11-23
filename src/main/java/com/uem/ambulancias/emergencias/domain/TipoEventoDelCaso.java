@@ -49,7 +49,25 @@ public enum TipoEventoDelCaso {
 	PLAN_DE_RESPUESTA_ACTUALIZADO,
 
 	/** El sistema le pidió al testigo que conteste una pregunta del formulario, porque la condición quedó en duda. */
-	PREGUNTA_AL_TESTIGO;
+	PREGUNTA_AL_TESTIGO,
+
+	/** El sistema le pasó un asunto del caso a una persona de la central, con sus opciones y un tiempo límite. */
+	DERIVADO_A_PERSONA,
+
+	/** La persona de la central contestó una derivación. */
+	DERIVACION_RESUELTA,
+
+	/** Nadie contestó la derivación a tiempo y se aplicó la opción segura. */
+	DERIVACION_VENCIDA,
+
+	/** La derivación dejó de hacer falta antes de que contestaran. */
+	DERIVACION_RETIRADA,
+
+	/**
+	 * Una condición quedó decidida fuera de las reglas y del modelo: la decidió la central, o se dio por cumplida
+	 * ante la duda porque nadie contestó.
+	 */
+	CONDICION_DECIDIDA;
 
 	/**
 	 * Si el renglón trae algo nuevo sobre lo que pasa en el lugar. Son los que piden volver a evaluar las condiciones
@@ -58,7 +76,7 @@ public enum TipoEventoDelCaso {
 	public boolean aportaDatosDelSuceso() {
 		return switch (this) {
 			case ALERTA_RECIBIDA, DETALLES_COMPLETADOS, EVIDENCIA_ANALIZADA, TIPO_DE_SUCESO_DECLARADO,
-					RESPUESTA_DEL_TESTIGO -> true;
+					RESPUESTA_DEL_TESTIGO, CONDICION_DECIDIDA -> true;
 			default -> false;
 		};
 	}

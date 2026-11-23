@@ -12,6 +12,7 @@ import com.uem.ambulancias.emergencias.service.PublicadorDeUnidades;
 import com.uem.ambulancias.emergencias.service.SeguimientoPublicado;
 import com.uem.ambulancias.emergencias.service.UnidadPublicada;
 import com.uem.ambulancias.evidencias.service.PublicadorDeResumenes;
+import com.uem.ambulancias.coordinacion.service.PublicadorDeDerivaciones;
 import com.uem.ambulancias.flota.service.PosicionActualizada;
 import com.uem.ambulancias.flota.service.PublicadorDePosiciones;
 
@@ -24,7 +25,8 @@ import lombok.RequiredArgsConstructor;
  */
 @RequiredArgsConstructor
 public class PublicadorFirebase
-		implements PublicadorDeIncidentes, PublicadorDePosiciones, PublicadorDeUnidades, PublicadorDeResumenes {
+		implements PublicadorDeIncidentes, PublicadorDePosiciones, PublicadorDeUnidades, PublicadorDeResumenes,
+		PublicadorDeDerivaciones {
 
 	/** Un hijo por incidente abierto, con su id como clave. Lo escuchan las apps del paramédico. */
 	static final String INCIDENTES_ABIERTOS = "incidentes-abiertos";
@@ -44,7 +46,22 @@ public class PublicadorFirebase
 	 */
 	static final String RESUMENES = "resumenes";
 
+	/**
+	 * Un solo nodo con cuántas derivaciones le quedan por atender a la central. El panel lo escucha y, cuando cambia,
+	 * vuelve a pedir la lista al backend.
+	 */
+	static final String DERIVACIONES = "derivaciones";
+
 	private final FirebaseDatabase baseDatos;
+
+	@Override
+	public void publicarPendientes(long cantidad) {
+		Map<String, Object> valores = new HashMap<>();
+		valores.put("pendientes", cantidad);
+		valores.put("actualizadoEn", Instant.now().toString());
+		EscriturasFirebase.registrarFallo(baseDatos.getReference(DERIVACIONES).setValueAsync(valores),
+				"publicar las derivaciones pendientes");
+	}
 
 	@Override
 	public void publicarIncidenteAbierto(IncidentePublicado incidente) {

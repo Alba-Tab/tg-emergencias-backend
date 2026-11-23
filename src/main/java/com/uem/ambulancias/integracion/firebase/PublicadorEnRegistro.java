@@ -13,6 +13,7 @@ import com.uem.ambulancias.emergencias.service.PublicadorDeUnidades;
 import com.uem.ambulancias.emergencias.service.SeguimientoPublicado;
 import com.uem.ambulancias.emergencias.service.UnidadPublicada;
 import com.uem.ambulancias.evidencias.service.PublicadorDeResumenes;
+import com.uem.ambulancias.coordinacion.service.PublicadorDeDerivaciones;
 import com.uem.ambulancias.flota.service.PosicionActualizada;
 import com.uem.ambulancias.flota.service.PublicadorDePosiciones;
 
@@ -24,7 +25,12 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class PublicadorEnRegistro
 		implements PublicadorDeIncidentes, PublicadorDePosiciones, PublicadorDeUnidades, PublicadorDeResumenes,
-		NotificadorPush {
+		PublicadorDeDerivaciones, NotificadorPush {
+
+	@Override
+	public void publicarPendientes(long cantidad) {
+		log.info("Firebase apagado: no se avisa al panel que tiene {} derivaciones por atender.", cantidad);
+	}
 
 	@Override
 	public void publicarIncidenteAbierto(IncidentePublicado incidente) {

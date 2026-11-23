@@ -15,6 +15,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
@@ -45,10 +46,27 @@ public class ColaDeEvaluaciones {
 		}
 		// Bloqueado, para que dos novedades simultáneas no dejen dos evaluaciones en la cola.
 		Incidente incidente = incidentes.buscarParaActualizar(novedad.incidenteId()).orElse(null);
-		if (incidente == null || !seEvalua(incidente) || evaluaciones.existePendiente(incidente.getId())) {
+		if (incidente == null || !seEvalua(incidente)) {
 			return;
 		}
-		evaluaciones.save(EvaluacionDelCaso.pedir(incidente, novedad.tipo().name(), Instant.now()));
+		Instant ahora = Instant.now();
+		if (evaluaciones.existePendiente(incidente.getId())) {
+			// La que esperaba para más tarde se adelanta: llegó algo nuevo y no hay por qué esperar.
+			evaluaciones.adelantarPendientes(incidente.getId(), novedad.tipo().name(), ahora);
+			return;
+		}
+		evaluaciones.save(EvaluacionDelCaso.pedir(incidente, novedad.tipo().name(), ahora));
+	}
+
+	/**
+	 * Pide volver a evaluar el incidente más tarde, aunque no llegue nada nuevo: es el reloj con el que se nota que el
+	 * testigo no contestó. Si ya hay una evaluación esperando, alcanza con esa. El incidente llega bloqueado.
+	 */
+	@Transactional(propagation = Propagation.MANDATORY)
+	public void pedirParaDespues(Incidente incidente, String motivo, Instant desde) {
+		if (!evaluaciones.existePendiente(incidente.getId())) {
+			evaluaciones.save(EvaluacionDelCaso.pedirPara(incidente, motivo, Instant.now(), desde));
+		}
 	}
 
 	/**
