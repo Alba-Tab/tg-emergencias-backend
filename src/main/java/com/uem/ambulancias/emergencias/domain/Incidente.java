@@ -5,6 +5,7 @@ import java.time.Instant;
 import com.uem.ambulancias.comun.error.CodigoError;
 import com.uem.ambulancias.comun.error.ConflictoException;
 import com.uem.ambulancias.comun.geo.Geo;
+import com.uem.ambulancias.protocolo.domain.Protocolo;
 import com.uem.ambulancias.usuarios.domain.Usuario;
 
 import jakarta.persistence.Column;
@@ -62,6 +63,17 @@ public class Incidente {
 	@Column(length = 1000)
 	private String detalleCierre;
 
+	/**
+	 * Qué pasó, según el primer tipo de suceso que se declaró. El código pertenece a {@code protocolo}, la versión
+	 * con la que se atiende este caso aunque después se publique otra.
+	 */
+	@Column(length = 60)
+	private String tipoSuceso;
+
+	@ManyToOne(fetch = FetchType.LAZY)
+	@JoinColumn(name = "protocolo_id")
+	private Protocolo protocolo;
+
 	/** ME-1 I0: nace ACTIVO con la ubicación efectiva y los afectados de su primera alerta. */
 	public static Incidente crear(Point ubicacion, Integer cantidadAfectados, Instant fechaHoraCreacion) {
 		Incidente incidente = new Incidente();
@@ -83,6 +95,19 @@ public class Incidente {
 		if (cantidadAfectados == null || cantidad > cantidadAfectados) {
 			cantidadAfectados = cantidad;
 		}
+	}
+
+	/**
+	 * Fija el tipo de suceso del incidente junto con el protocolo que lo define. Vale el primero que se declara: uno
+	 * posterior no lo pisa. Devuelve si quedó fijado ahora.
+	 */
+	public boolean declararTipo(Protocolo protocolo, String codigo) {
+		if (tipoSuceso != null) {
+			return false;
+		}
+		this.protocolo = protocolo;
+		this.tipoSuceso = codigo;
+		return true;
 	}
 
 	/** Cierre deducido por el sistema a partir de lo que reportaron las unidades. */

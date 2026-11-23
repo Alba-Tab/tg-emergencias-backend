@@ -13,5 +13,9 @@ public record DetallesAlertaRequest(
 		Integer cantidadAfectados,
 
 		@Size(max = 2000, message = "La descripción es demasiado larga.")
-		String descripcion) {
+		String descripcion,
+
+		/** El tipo de suceso, para quien no lo marcó al emitir (PB-30). */
+		@Size(max = 60, message = "El tipo de suceso es demasiado largo.")
+		String tipoSuceso) {
 }

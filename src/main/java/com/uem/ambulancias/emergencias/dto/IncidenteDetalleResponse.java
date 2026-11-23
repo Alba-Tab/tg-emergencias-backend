@@ -30,7 +30,9 @@ public record IncidenteDetalleResponse(
 		/** El administrador que lo cerró a mano. Nulo si se cerró solo, por lo que pasó con sus unidades o alertas. */
 		String cerradoPor,
 		/** Lo que escribió al cerrarlo; en una falsa alarma, cómo se verificó. */
-		String detalleCierre) {
+		String detalleCierre,
+		/** El código del tipo de suceso que se declaró primero. Nulo si nadie marcó ninguno. */
+		String tipoSuceso) {
 
 	/**
 	 * {@code alertas} con su emisor y {@code atenciones} con su ambulancia, su paramédico responsable y su centro de
@@ -53,7 +55,8 @@ public record IncidenteDetalleResponse(
 				alertas.stream().map(AlertaDeIncidenteResponse::de).toList(),
 				atenciones.stream().map(AtencionDeIncidenteResponse::de).toList(),
 				incidente.getCerradoPor() == null ? null : incidente.getCerradoPor().getNombreCompleto(),
-				incidente.getDetalleCierre());
+				incidente.getDetalleCierre(),
+				incidente.getTipoSuceso());
 	}
 
 }

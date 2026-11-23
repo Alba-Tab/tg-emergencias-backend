@@ -1,6 +1,7 @@
 package com.uem.ambulancias.emergencias.controller;
 
 import java.time.Instant;
+import java.util.List;
 
 import com.uem.ambulancias.comun.geo.Geo;
 import com.uem.ambulancias.comun.web.UsuarioActual;
@@ -11,13 +12,18 @@ import com.uem.ambulancias.emergencias.dto.AlertaResponse;
 import com.uem.ambulancias.emergencias.dto.CancelarAlertaRequest;
 import com.uem.ambulancias.emergencias.dto.CrearAlertaRequest;
 import com.uem.ambulancias.emergencias.dto.DetallesAlertaRequest;
+import com.uem.ambulancias.emergencias.dto.ResponderFormularioRequest;
+import com.uem.ambulancias.emergencias.dto.RespuestaDelFormularioResponse;
+import com.uem.ambulancias.emergencias.service.FormularioDelCaso;
 import com.uem.ambulancias.emergencias.service.IncidenteService;
+import com.uem.ambulancias.emergencias.service.RespuestaALaCondicion;
 import com.uem.ambulancias.usuarios.domain.Usuario;
 import com.uem.ambulancias.usuarios.service.CiudadanoService;
 
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -32,6 +38,7 @@ public class AlertaController {
 
 	private final CiudadanoService ciudadanoService;
 	private final IncidenteService incidenteService;
+	private final FormularioDelCaso formulario;
 
 	/**
 	 * SEC-A: construye la alerta del ciudadano emisor y delega la agrupación en {@link IncidenteService}. Se acepta
@@ -45,7 +52,7 @@ public class AlertaController {
 		Alerta alerta = Alerta.emitir(emisor, Geo.punto(request.latitud(), request.longitud()),
 				request.origenUbicacion(), request.cantidadAfectados(), Textos.opcional(request.descripcion()),
 				Instant.now());
-		Incidente incidente = incidenteService.agruparAlerta(alerta);
+		Incidente incidente = incidenteService.agruparAlerta(alerta, Textos.opcional(request.tipoSuceso()));
 		return AlertaResponse.de(alerta, incidente);
 	}
 
@@ -58,8 +65,28 @@ public class AlertaController {
 			@UsuarioActual Long usuarioId,
 			@Valid @RequestBody DetallesAlertaRequest request) {
 		Alerta alerta = incidenteService.completarDetalles(alertaId, usuarioId, request.cantidadAfectados(),
-				Textos.opcional(request.descripcion()));
+				Textos.opcional(request.descripcion()), Textos.opcional(request.tipoSuceso()));
 		return AlertaResponse.de(alerta, alerta.getIncidente());
+	}
+
+	/**
+	 * El ciudadano contesta el formulario de su tipo de suceso mientras espera (PB-30). Devuelve cómo quedó
+	 * contestado: la última respuesta de cada condición.
+	 */
+	@PostMapping("/{alertaId}/respuestas")
+	public List<RespuestaDelFormularioResponse> responder(@PathVariable Long alertaId, @UsuarioActual Long usuarioId,
+			@Valid @RequestBody ResponderFormularioRequest request) {
+		List<RespuestaALaCondicion> respuestas = request.respuestas().stream()
+				.map(respuesta -> new RespuestaALaCondicion(respuesta.condicion().trim(), respuesta.valor()))
+				.toList();
+		return RespuestaDelFormularioResponse.de(formulario.responder(alertaId, usuarioId, respuestas));
+	}
+
+	/** Lo que el ciudadano ya contestó en esa alerta, para mostrarlo cuando vuelve a abrir la app. */
+	@GetMapping("/{alertaId}/respuestas")
+	public List<RespuestaDelFormularioResponse> respuestas(@PathVariable Long alertaId,
+			@UsuarioActual Long usuarioId) {
+		return RespuestaDelFormularioResponse.de(formulario.respuestasDe(alertaId, usuarioId));
 	}
 
 	/**

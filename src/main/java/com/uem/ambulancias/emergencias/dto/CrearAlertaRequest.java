@@ -10,7 +10,8 @@ import jakarta.validation.constraints.Size;
 
 /**
  * Ubicación (GPS o pin manual) y origen son obligatorios. {@code cantidadAfectados} y {@code descripcion} son
- * opcionales y nunca bloquean la emisión (PB-02 R3).
+ * opcionales y nunca bloquean la emisión (PB-02 R3). {@code tipoSuceso} es el código que el ciudadano marcó entre
+ * los del protocolo vigente: tampoco bloquea, y uno que el protocolo no conoce se ignora (PB-30).
  */
 public record CrearAlertaRequest(
 
@@ -31,5 +32,8 @@ public record CrearAlertaRequest(
 		Integer cantidadAfectados,
 
 		@Size(max = 2000, message = "La descripción es demasiado larga.")
-		String descripcion) {
+		String descripcion,
+
+		@Size(max = 60, message = "El tipo de suceso es demasiado largo.")
+		String tipoSuceso) {
 }

@@ -69,6 +69,10 @@ public class Alerta {
 	@Column(columnDefinition = "text")
 	private String descripcion;
 
+	/** Qué pasó, según marcó quien alertó: un código del protocolo vigente en ese momento. Nulo si no marcó nada. */
+	@Column(length = 60)
+	private String tipoSuceso;
+
 	@ManyToOne(fetch = FetchType.LAZY, optional = false)
 	@JoinColumn(name = "emisor_id", nullable = false)
 	private Usuario emisor;
@@ -130,6 +134,11 @@ public class Alerta {
 		if (descripcion != null) {
 			this.descripcion = descripcion;
 		}
+	}
+
+	/** Deja anotado el tipo de suceso que el ciudadano marcó, ya comprobado contra el protocolo vigente. */
+	public void declararTipo(String codigo) {
+		this.tipoSuceso = codigo;
 	}
 
 }
