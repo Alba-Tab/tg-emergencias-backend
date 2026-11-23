@@ -274,9 +274,9 @@ class EvaluacionDeCondicionesIT extends PruebaIT {
 				.andExpect(jsonPath("$[0].veredictos[1].resultado").value("SIN_EVALUAR"))
 				.andExpect(jsonPath("$[0].veredictos[1].fuente").doesNotExist());
 		bitacora(alerta.incidenteId())
-				.andExpect(jsonPath("$[3].tipo").value("CONDICIONES_EVALUADAS"))
-				.andExpect(jsonPath("$[3].datos.metodo").value("REGLAS_SIN_MODELO"))
-				.andExpect(jsonPath("$[3].datos.error").value("provider_unavailable"));
+				.andExpect(jsonPath("$[?(@.tipo == 'CONDICIONES_EVALUADAS')].datos.metodo").value("REGLAS_SIN_MODELO"))
+				.andExpect(jsonPath("$[?(@.tipo == 'CONDICIONES_EVALUADAS')].datos.error")
+						.value("provider_unavailable"));
 	}
 
 	@Test
