@@ -15,6 +15,7 @@ import com.uem.ambulancias.emergencias.repository.EventoDelCasoRepository;
 import com.uem.ambulancias.emergencias.repository.IncidenteRepository;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -32,6 +33,7 @@ public class BitacoraDelCaso {
 	private final EventoDelCasoRepository eventos;
 	private final IncidenteRepository incidentes;
 	private final JsonMapper json;
+	private final ApplicationEventPublisher novedades;
 
 	/**
 	 * Arma los datos de un evento de a pares clave, valor. Un valor {@code null} no se incluye: en la bitácora, lo
@@ -50,12 +52,17 @@ public class BitacoraDelCaso {
 		return datos;
 	}
 
-	/** Agrega un renglón. Exige una transacción ya abierta: la del cambio que se está anotando. */
+	/**
+	 * Agrega un renglón. Exige una transacción ya abierta: la del cambio que se está anotando. Avisa de la novedad
+	 * dentro de esa misma transacción, para quien tenga que reaccionar a lo que se acaba de saber del caso.
+	 */
 	@Transactional(propagation = Propagation.MANDATORY)
 	public EventoDelCaso anotar(Incidente incidente, Alerta alerta, TipoEventoDelCaso tipo, OrigenDelEvento origen,
 			Instant ocurridoEn, Map<String, Object> datos) {
-		return eventos.save(EventoDelCaso.anotar(incidente, alerta, tipo, origen, json.writeValueAsString(datos),
-				ocurridoEn, Instant.now()));
+		EventoDelCaso anotado = eventos.save(EventoDelCaso.anotar(incidente, alerta, tipo, origen,
+				json.writeValueAsString(datos), ocurridoEn, Instant.now()));
+		novedades.publishEvent(new NovedadEnLaBitacora(incidente.getId(), tipo));
+		return anotado;
 	}
 
 	/** La bitácora completa del incidente, del renglón más viejo al más nuevo. */

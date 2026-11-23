@@ -80,9 +80,7 @@ public class AvisoAlParamedico {
 				return;
 			}
 			incidentes.findById(evento.incidenteId()).ifPresent(incidente -> notificador.notificarIncidenteAsignado(
-					tokens, new IncidentePublicado(incidente.getId(), incidente.getUbicacion().getY(),
-							incidente.getUbicacion().getX(), incidente.getEstado(), incidente.getFechaHoraCreacion(),
-							incidente.getCantidadAfectados(), alertas.buscarDescripciones(incidente.getId()),
+					tokens, IncidentePublicado.de(incidente, alertas.buscarDescripciones(incidente.getId()),
 							atenciones.buscarActivasPorIncidente(incidente.getId()).size())));
 		} catch (RuntimeException e) {
 			log.error("No se pudo avisar del incidente {} a la ambulancia {}.", evento.incidenteId(),

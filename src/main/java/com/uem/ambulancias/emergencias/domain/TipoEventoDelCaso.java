@@ -40,6 +40,27 @@ public enum TipoEventoDelCaso {
 	ASIGNACION_RETIRADA,
 
 	/** No quedó ninguna unidad a la que asignarle el incidente: se abrió a todas. */
-	SIN_UNIDAD_PARA_ASIGNAR
+	SIN_UNIDAD_PARA_ASIGNAR,
+
+	/** El sistema evaluó las condiciones del protocolo con lo que se sabía del caso hasta ese momento. */
+	CONDICIONES_EVALUADAS,
+
+	/** Subió lo que el incidente necesita: más unidades o una de más capacidad, por las condiciones que se cumplen. */
+	PLAN_DE_RESPUESTA_ACTUALIZADO,
+
+	/** El sistema le pidió al testigo que conteste una pregunta del formulario, porque la condición quedó en duda. */
+	PREGUNTA_AL_TESTIGO;
+
+	/**
+	 * Si el renglón trae algo nuevo sobre lo que pasa en el lugar. Son los que piden volver a evaluar las condiciones
+	 * del protocolo; los demás cuentan lo que el sistema o las tripulaciones hicieron con el caso.
+	 */
+	public boolean aportaDatosDelSuceso() {
+		return switch (this) {
+			case ALERTA_RECIBIDA, DETALLES_COMPLETADOS, EVIDENCIA_ANALIZADA, TIPO_DE_SUCESO_DECLARADO,
+					RESPUESTA_DEL_TESTIGO -> true;
+			default -> false;
+		};
+	}
 
 }

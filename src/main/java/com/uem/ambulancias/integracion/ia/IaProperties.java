@@ -26,7 +26,13 @@ public record IaProperties(
 		 * Cuánto se espera la respuesta. El peor caso del servicio ronda los 265 segundos con un video (ffmpeg más sus propios reintentos);
 		 * cortar antes sería tirar un análisis que estaba por llegar.
 		 */
-		@DefaultValue("300") int segundosLectura) {
+		@DefaultValue("300") int segundosLectura,
+
+		/**
+		 * Cuánto se espera la respuesta del modelo de decisión. Es una sola llamada corta, pero el servicio la intenta
+		 * dos veces con 15 segundos cada una: menos que eso cortaría una respuesta que estaba por llegar.
+		 */
+		@DefaultValue("40") int segundosLecturaEvaluacion) {
 
 	public Duration conexion() {
 		return Duration.ofSeconds(segundosConexion);
@@ -34,6 +40,10 @@ public record IaProperties(
 
 	public Duration lectura() {
 		return Duration.ofSeconds(segundosLectura);
+	}
+
+	public Duration lecturaDeEvaluacion() {
+		return Duration.ofSeconds(segundosLecturaEvaluacion);
 	}
 
 }
