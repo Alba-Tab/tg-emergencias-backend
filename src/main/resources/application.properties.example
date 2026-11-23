@@ -97,6 +97,14 @@ sga.coordinacion.espera-maxima-seg=30
 # Segundos que una evaluacion tomada es del evaluador. Mayor que sga.ia.segundos-lectura-evaluacion.
 sga.coordinacion.segundos-bloqueo=90
 
+# Derivacion a una persona: lo que el sistema no decide solo se lo pasa a la central. Todos tienen valor por defecto.
+# Segundos que se espera la respuesta de la persona antes de aplicar la opcion segura.
+sga.derivacion.segundos-respuesta=60
+# Segundos que se espera que el testigo conteste una pregunta antes de pasarle la condicion a una persona.
+sga.derivacion.segundos-del-testigo=45
+# Cada cuantos segundos corre el barrido que da por vencidas las derivaciones sin respuesta.
+sga.derivacion.barrido-seg=5
+
 # Evidencias que el ciudadano adjunta a su alerta (foto, audio o video). Todos tienen valor por defecto.
 # Cuantas puede adjuntar a una misma alerta.
 sga.evidencias.maximo-por-alerta=5
