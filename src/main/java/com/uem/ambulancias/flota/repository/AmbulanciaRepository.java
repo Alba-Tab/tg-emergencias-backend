@@ -49,6 +49,20 @@ public interface AmbulanciaRepository extends JpaRepository<Ambulancia, Long> {
 	 * <p>Devuelve solo los ids: quien asigna bloquea después la fila de cada candidata, y si la ambulancia ya
 	 * estuviera cargada, Hibernate le devolvería esta copia sin releerla y no vería que se fue a una emergencia.
 	 */
+	/**
+	 * Las DISPONIBLES y activas con posición reciente, de la más cercana al punto a la más lejana, para asignarles
+	 * un incidente. Solo los ids, por lo mismo que en los traslados: cada candidata se relee bloqueada.
+	 */
+	@Query(value = """
+			select a.id from ambulancia a
+			where a.estado = 'DISPONIBLE' and a.activa
+			  and a.ultima_posicion_en >= :posicionDesde
+			order by ST_Distance(a.ultima_posicion::geography,
+			                     ST_SetSRID(ST_MakePoint(:longitud, :latitud), 4326)::geography) asc
+			""", nativeQuery = true)
+	List<Long> buscarIdsDisponiblesParaIncidente(@Param("latitud") double latitud,
+			@Param("longitud") double longitud, @Param("posicionDesde") Instant posicionDesde);
+
 	@Query(value = """
 			select a.id from ambulancia a
 			where a.estado = 'DISPONIBLE' and a.activa and a.tipo_unidad in (:tipos)
