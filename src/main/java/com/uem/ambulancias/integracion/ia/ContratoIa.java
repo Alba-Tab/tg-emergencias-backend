@@ -107,6 +107,31 @@ final class ContratoIa {
 	record EmbeddingResponse(List<List<Double>> vectors, Provenance provenance) {
 	}
 
+	record ProtocolReviewRequest(String jobId, @JsonRawValue String protocol, List<ReviewFact> facts,
+			List<ReviewNormExcerpt> normExcerpts) {
+
+		@Override
+		public String toString() {
+			return "ProtocolReviewRequest[jobId=" + jobId + ", facts=" + (facts == null ? 0 : facts.size()) + "]";
+		}
+
+	}
+
+	record ReviewFact(String id, String eventType, String condition, String text) {
+	}
+
+	record ReviewNormExcerpt(String id, String citation, String text) {
+	}
+
+	@JsonIgnoreProperties(ignoreUnknown = true)
+	record ProtocolReviewResponse(List<ReviewProposal> proposals, Integer discarded, Provenance provenance) {
+	}
+
+	@JsonIgnoreProperties(ignoreUnknown = true)
+	record ReviewProposal(String kind, String eventType, String condition, String proposal, String rationale,
+			List<String> factIds, List<String> normIds) {
+	}
+
 	@JsonIgnoreProperties(ignoreUnknown = true)
 	record ErrorResponse(String errorCode, Boolean retryable) {
 	}

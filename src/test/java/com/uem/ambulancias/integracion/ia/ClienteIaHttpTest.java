@@ -25,7 +25,10 @@ import com.uem.ambulancias.integracion.ia.ContratoIa.Conclusion;
 import com.uem.ambulancias.integracion.ia.ContratoIa.EmbeddingResponse;
 import com.uem.ambulancias.integracion.ia.ContratoIa.EvaluationResponse;
 import com.uem.ambulancias.integracion.ia.ContratoIa.Provenance;
+import com.uem.ambulancias.integracion.ia.ContratoIa.ProtocolReviewResponse;
 import com.uem.ambulancias.integracion.ia.ContratoIa.ReasoningResponse;
+import com.uem.ambulancias.integracion.ia.ContratoIa.ReviewProposal;
+import com.uem.ambulancias.revision.service.AnalistaDelProtocolo;
 import com.uem.ambulancias.memoria.service.ModeloDeEmbeddings;
 
 /** La tabla con la que el backend decide qué hacer con cada error del servicio de IA. */
@@ -173,6 +176,34 @@ class ClienteIaHttpTest {
 					assertThat(fallo.getCodigo()).isEqualTo("respuesta_incompleta");
 					assertThat(fallo.getDesenlace()).isEqualTo(Desenlace.REINTENTAR);
 				}));
+	}
+
+	@Test
+	@Tag("PB-45")
+	@DisplayName("PB-45 · las propuestas del analista llegan con su tipo, su porqué y lo que citan; una a medias hace reintentar la revisión")
+	void propuestasDelAnalista() {
+		AnalistaDelProtocolo.PropuestasRecibidas recibidas = ClienteIaHttp.propuestas(new ProtocolReviewResponse(
+				List.of(new ReviewProposal("change_question", "DOLOR_PECHO", "DOLOR_SIGUE", "Preguntar distinto.",
+						"Nadie la contesta.", List.of("H2"), null)),
+				3, new Provenance("openrouter", "google/gemini-3.8-flash", "protocol-review-v1", null, "model")));
+
+		assertThat(recibidas.propuestas()).hasSize(1);
+		AnalistaDelProtocolo.Propuesta propuesta = recibidas.propuestas().getFirst();
+		assertThat(propuesta.tipo()).isEqualTo("change_question");
+		assertThat(propuesta.tipoDeSuceso()).isEqualTo("DOLOR_PECHO");
+		assertThat(propuesta.condicion()).isEqualTo("DOLOR_SIGUE");
+		assertThat(propuesta.hechos()).containsExactly("H2");
+		assertThat(propuesta.norma()).isEmpty();
+		assertThat(recibidas.descartadas()).isEqualTo(3);
+		assertThat(recibidas.modelo()).isEqualTo("google/gemini-3.8-flash");
+		assertThat(recibidas.versionDelPrompt()).isEqualTo("protocol-review-v1");
+
+		assertThat(ClienteIaHttp.propuestas(new ProtocolReviewResponse(List.of(), null, null)).propuestas()).isEmpty();
+		assertThatThrownBy(() -> ClienteIaHttp.propuestas(new ProtocolReviewResponse(null, 0, null)))
+				.isInstanceOf(FalloDelServicioIa.class);
+		assertThatThrownBy(() -> ClienteIaHttp.propuestas(new ProtocolReviewResponse(
+				List.of(new ReviewProposal("other", "DOLOR_PECHO", null, null, "Sin propuesta.", null, null)), 0, null)))
+				.isInstanceOf(FalloDelServicioIa.class);
 	}
 
 }
