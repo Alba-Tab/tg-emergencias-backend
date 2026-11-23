@@ -10,6 +10,7 @@ import com.uem.ambulancias.emergencias.domain.Incidente;
 import com.uem.ambulancias.emergencias.dto.AtencionResponse;
 import com.uem.ambulancias.emergencias.dto.CerrarIncidenteRequest;
 import com.uem.ambulancias.emergencias.dto.DespacharUnidadRequest;
+import com.uem.ambulancias.emergencias.dto.EventoDelCasoResponse;
 import com.uem.ambulancias.emergencias.dto.FiltroEstadoIncidente;
 import com.uem.ambulancias.emergencias.dto.IncidenteDetalleResponse;
 import com.uem.ambulancias.emergencias.dto.IncidenteResumenResponse;
@@ -17,6 +18,7 @@ import com.uem.ambulancias.emergencias.dto.UnidadAcudiendoResponse;
 import com.uem.ambulancias.emergencias.dto.UnidadCandidataResponse;
 import com.uem.ambulancias.emergencias.exception.IncidenteYaTomadoException;
 import com.uem.ambulancias.emergencias.service.AtencionService;
+import com.uem.ambulancias.emergencias.service.BitacoraDelCaso;
 import com.uem.ambulancias.emergencias.service.ConsultaIncidentesService;
 import com.uem.ambulancias.emergencias.service.DespachoDeIncidentes;
 import com.uem.ambulancias.emergencias.service.IncidenteConAlertasYAtenciones;
@@ -55,6 +57,7 @@ public class IncidenteController {
 	private final ServicioParamedicoService servicioParamedicoService;
 	private final TurnoService turnoService;
 	private final DespachoDeIncidentes despacho;
+	private final BitacoraDelCaso bitacora;
 
 	/** Incidentes del filtro, del más reciente al más antiguo. La página empieza en 0 y el tamaño máximo es 100. */
 	@GetMapping
@@ -72,6 +75,12 @@ public class IncidenteController {
 	public IncidenteDetalleResponse detalle(@PathVariable("id") Long idIncidente) {
 		IncidenteConAlertasYAtenciones detalle = consultaIncidentesService.detalle(idIncidente);
 		return IncidenteDetalleResponse.de(detalle.incidente(), detalle.alertas(), detalle.atenciones());
+	}
+
+	/** La bitácora del caso: qué llegó al incidente y quién lo aportó, en el orden en que se anotó. 404 si no existe. */
+	@GetMapping("/{id}/bitacora")
+	public List<EventoDelCasoResponse> bitacora(@PathVariable("id") Long idIncidente) {
+		return bitacora.deIncidente(idIncidente).stream().map(EventoDelCasoResponse::de).toList();
 	}
 
 	/** Con qué unidades se puede mandar a mano, de la más cercana al lugar a la más lejana. */
