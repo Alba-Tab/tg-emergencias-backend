@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import com.uem.ambulancias.coordinacion.domain.FuenteDelVeredicto;
 import com.uem.ambulancias.emergencias.domain.Alerta;
 import com.uem.ambulancias.emergencias.domain.EstadoAlerta;
 import com.uem.ambulancias.emergencias.domain.EventoDelCaso;
@@ -46,6 +47,8 @@ public class ArmadorDelEstado {
 
 	static final String AFECTADOS = "afectadosDeclarados";
 
+	static final String DECIDIDAS = "condicionesDecididas";
+
 	/** Cuántas frases de cada lista de un análisis se incluyen: más no suma y alarga el estado. */
 	private static final int MAXIMO_DE_FRASES = 8;
 
@@ -75,6 +78,7 @@ public class ArmadorDelEstado {
 			}
 		}
 		Map<String, RespuestaDelTestigo> respuestas = respuestasDe(bitacora, retiradas);
+		Map<String, JuicioDelProtocolo.Decidida> decididas = decididasDe(bitacora);
 		List<Map<String, Object>> evidencias = new ArrayList<>();
 		for (AnalisisEvidencia uno : analisis.buscarVigentesPorIncidente(incidenteId)) {
 			Map<String, Object> descrita = evidenciaDescrita(uno);
@@ -95,6 +99,12 @@ public class ArmadorDelEstado {
 		Map<String, String> respuestasDelTestigo = new LinkedHashMap<>();
 		respuestas.forEach((condicion, valor) -> respuestasDelTestigo.put(condicion, valor.name()));
 		estado.put(RESPUESTAS, respuestasDelTestigo);
+		if (!decididas.isEmpty()) {
+			Map<String, Object> yaDecididas = new LinkedHashMap<>();
+			decididas.forEach((condicion, decidida) -> yaDecididas.put(condicion,
+					Map.of("cumple", decidida.cumple(), "por", decidida.fuente().name())));
+			estado.put(DECIDIDAS, yaDecididas);
+		}
 		estado.put("evidencias", evidencias);
 		resumenes.findFirstByIncidenteIdOrderByVersionDesc(incidenteId)
 				.map(resumen -> resumenDescrito(resumen.getResumen(), incidenteId))
@@ -102,7 +112,7 @@ public class ArmadorDelEstado {
 
 		Long hastaEvento = bitacora.isEmpty() ? null : bitacora.getLast().getId();
 		return new EstadoArmado(estado, new JuicioDelProtocolo.Hechos(respuestas, incidente.getCantidadAfectados(),
-				!evidencias.isEmpty()), hastaEvento);
+				!evidencias.isEmpty(), decididas), hastaEvento);
 	}
 
 	/** Los hechos que usan las reglas, releídos de un estado que ya se armó y se guardó. */
@@ -110,9 +120,27 @@ public class ArmadorDelEstado {
 		Map<String, RespuestaDelTestigo> respuestas = new LinkedHashMap<>();
 		estado.path(RESPUESTAS).properties().forEach(campo -> respuestas.put(campo.getKey(),
 				RespuestaDelTestigo.valueOf(campo.getValue().asString())));
+		Map<String, JuicioDelProtocolo.Decidida> decididas = new LinkedHashMap<>();
+		estado.path(DECIDIDAS).properties().forEach(campo -> decididas.put(campo.getKey(),
+				new JuicioDelProtocolo.Decidida(campo.getValue().path("cumple").asBoolean(),
+						FuenteDelVeredicto.valueOf(campo.getValue().path("por").asString()))));
 		JsonNode afectados = estado.path(AFECTADOS);
 		return new JuicioDelProtocolo.Hechos(respuestas, afectados.isNumber() ? afectados.asInt() : null,
-				!estado.path("evidencias").isEmpty());
+				!estado.path("evidencias").isEmpty(), decididas);
+	}
+
+	/** Las condiciones que ya decidió la central o que se dieron por cumplidas ante la duda. Vale la última. */
+	private Map<String, JuicioDelProtocolo.Decidida> decididasDe(List<EventoDelCaso> bitacora) {
+		Map<String, JuicioDelProtocolo.Decidida> decididas = new LinkedHashMap<>();
+		for (EventoDelCaso evento : bitacora) {
+			if (evento.getTipo() != TipoEventoDelCaso.CONDICION_DECIDIDA) {
+				continue;
+			}
+			JsonNode datos = json.readTree(evento.getDatos());
+			decididas.put(datos.path("condicion").asString(), new JuicioDelProtocolo.Decidida(
+					datos.path("cumple").asBoolean(), FuenteDelVeredicto.valueOf(datos.path("por").asString())));
+		}
+		return decididas;
 	}
 
 	/**
