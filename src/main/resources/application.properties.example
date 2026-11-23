@@ -83,6 +83,8 @@ sga.operacion.sin-senal-seg=60
 sga.despacho.modo=DIFUSION
 # Segundos que se espera a que la tripulacion confirme una asignacion antes de pasar a la unidad siguiente.
 sga.despacho.segundos-confirmacion=30
+# Cada cuantos segundos corre el barrido que da por vencidas las asignaciones sin respuesta.
+sga.despacho.barrido-seg=5
 
 # Evidencias que el ciudadano adjunta a su alerta (foto, audio o video). Todos tienen valor por defecto.
 # Cuantas puede adjuntar a una misma alerta.

@@ -7,6 +7,7 @@ import java.util.Map;
 
 import com.uem.ambulancias.emergencias.domain.Atencion;
 import com.uem.ambulancias.emergencias.domain.Incidente;
+import com.uem.ambulancias.emergencias.domain.ModoDeDespacho;
 import com.uem.ambulancias.emergencias.repository.AlertaRepository;
 import com.uem.ambulancias.emergencias.repository.AtencionRepository;
 import com.uem.ambulancias.emergencias.repository.IncidenteRepository;
@@ -41,6 +42,7 @@ public class DifusionDeIncidentes {
 	private final TurnoRepository turnos;
 	private final PublicadorDeIncidentes publicador;
 	private final NotificadorPush notificador;
+	private final AjustesDeDespacho ajustes;
 
 	@TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
 	@Transactional(propagation = Propagation.REQUIRES_NEW, readOnly = true)
@@ -70,7 +72,40 @@ public class DifusionDeIncidentes {
 			log.warn("Incidente {} sin unidades disponibles: se publica igual.", incidente.getId());
 		}
 
-		IncidentePublicado publicado = new IncidentePublicado(
+		IncidentePublicado publicado = publicado(incidente, activas.size());
+		publicador.publicarIncidenteAbierto(publicado);
+
+		// En modo asignación no se avisa a todas: el incidente se le asigna a una unidad, y el push le llega a ella.
+		if (avisar && ajustes.modo() == ModoDeDespacho.DIFUSION) {
+			notificador.notificarNuevoIncidente(tokensPorCercania(disponiblesPorCercania), publicado);
+		}
+	}
+
+	/**
+	 * En modo asignación no quedó ninguna unidad a la que asignarle el incidente: se avisa a todas las de turno, como
+	 * en el modo de siempre, para que lo tome la que pueda.
+	 */
+	@TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+	@Transactional(propagation = Propagation.REQUIRES_NEW, readOnly = true)
+	public void abrirATodas(IncidenteSinUnidadParaAsignar evento) {
+		try {
+			incidentes.findById(evento.incidenteId())
+					.filter(incidente -> incidente.getEstado().isAbierto())
+					.ifPresent(incidente -> {
+						Point ubicacion = incidente.getUbicacion();
+						List<Ambulancia> disponibles =
+								ambulancias.buscarDisponiblesPorCercania(ubicacion.getY(), ubicacion.getX());
+						notificador.notificarNuevoIncidente(tokensPorCercania(disponibles), publicado(incidente,
+								atenciones.buscarActivasPorIncidente(incidente.getId()).size()));
+					});
+		} catch (RuntimeException e) {
+			log.error("No se pudo abrir a todas el incidente {}.", evento.incidenteId(), e);
+		}
+	}
+
+	private IncidentePublicado publicado(Incidente incidente, int unidadesAcudiendo) {
+		Point ubicacion = incidente.getUbicacion();
+		return new IncidentePublicado(
 				incidente.getId(),
 				ubicacion.getY(),
 				ubicacion.getX(),
@@ -78,12 +113,7 @@ public class DifusionDeIncidentes {
 				incidente.getFechaHoraCreacion(),
 				incidente.getCantidadAfectados(),
 				alertas.buscarDescripciones(incidente.getId()),
-				activas.size());
-		publicador.publicarIncidenteAbierto(publicado);
-
-		if (avisar) {
-			notificador.notificarNuevoIncidente(tokensPorCercania(disponiblesPorCercania), publicado);
-		}
+				unidadesAcudiendo);
 	}
 
 	private static SeguimientoPublicado seguimiento(Incidente incidente, List<Atencion> activas) {
