@@ -67,6 +67,10 @@ public class Condicion {
 	@Enumerated(EnumType.STRING)
 	private TipoUnidad tipoMinimo;
 
+	/** La prioridad que como mínimo toma el caso cuando la condición se cumple, si la condición fija una. */
+	@Enumerated(EnumType.STRING)
+	private Prioridad prioridad;
+
 	/** Si cuando se cumple el caso tiene que verlo una persona, sin importar lo demás. */
 	@Column(nullable = false)
 	private boolean derivaAPersona;
@@ -128,7 +132,13 @@ public class Condicion {
 
 	public Condicion copiar() {
 		return de(codigo, enunciado, pregunta, umbralActuar, umbralPreguntar, unidadesAdicionales, tipoMinimo,
-				derivaAPersona, cita, afectadosDesde);
+				derivaAPersona, cita, afectadosDesde).conPrioridad(prioridad);
+	}
+
+	/** Fija la prioridad que la condición le da al caso cuando se cumple. Sin ella, no la cambia. */
+	public Condicion conPrioridad(Prioridad prioridad) {
+		this.prioridad = prioridad;
+		return this;
 	}
 
 	void asignar(TipoDeSuceso tipoDeSuceso, int orden) {

@@ -18,6 +18,7 @@ import com.uem.ambulancias.coordinacion.service.JuicioDelProtocolo.Hechos;
 import com.uem.ambulancias.emergencias.domain.RespuestaDelTestigo;
 import com.uem.ambulancias.flota.domain.TipoUnidad;
 import com.uem.ambulancias.protocolo.domain.Condicion;
+import com.uem.ambulancias.protocolo.domain.Prioridad;
 import com.uem.ambulancias.protocolo.domain.TipoDeSuceso;
 
 /** Cómo se decide cada condición: primero lo que contestó el testigo, después el modelo contra los umbrales. */
@@ -262,6 +263,31 @@ class JuicioDelProtocoloTest {
 		assertThat(de(finales, FUEGO).resultado()).isEqualTo(ResultadoDeCondicion.CUMPLIDA);
 		assertThat(de(finales, FUEGO).fuente()).isEqualTo(FuenteDelVeredicto.ANTE_LA_DUDA);
 		assertThat(finales).noneMatch(Veredicto::paraElModelo);
+	}
+
+	@Test
+	@Tag("PB-43")
+	@DisplayName("PB-43 · entre las condiciones cumplidas vale la prioridad más urgente, y la que solo fija prioridad figura como motivo del plan")
+	void planConPrioridad() {
+		TipoDeSuceso caida = TipoDeSuceso.de("CAIDA", "Caída", List.of(
+				Condicion.de("RESPONDE", "La persona responde", null, 0.8, 0.4, 0, null, false, null)
+						.conPrioridad(Prioridad.AMARILLA),
+				Condicion.de("NO_RESPIRA", "La persona no respira", null, 0.8, 0.4, 0, TipoUnidad.III, false, null)
+						.conPrioridad(Prioridad.ROJA),
+				Condicion.de("SANGRA", "La persona sangra", null, 0.8, 0.4, 0, null, false, null)));
+
+		PlanDeRespuesta sinNada = JuicioDelProtocolo.plan(caida, List.of(cumplida("SANGRA")));
+		assertThat(sinNada.prioridad()).isNull();
+		assertThat(sinNada.porCondiciones()).isEmpty();
+
+		PlanDeRespuesta amarillo = JuicioDelProtocolo.plan(caida, List.of(cumplida("RESPONDE"), cumplida("SANGRA")));
+		assertThat(amarillo.prioridad()).isEqualTo(Prioridad.AMARILLA);
+		assertThat(amarillo.unidades()).isEqualTo(1);
+		assertThat(amarillo.porCondiciones()).containsExactly("RESPONDE");
+
+		PlanDeRespuesta rojo = JuicioDelProtocolo.plan(caida, List.of(cumplida("RESPONDE"), cumplida("NO_RESPIRA")));
+		assertThat(rojo.prioridad()).isEqualTo(Prioridad.ROJA);
+		assertThat(rojo.tipoMinimo()).isEqualTo(TipoUnidad.III);
 	}
 
 }

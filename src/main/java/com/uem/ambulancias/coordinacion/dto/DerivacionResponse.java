@@ -8,6 +8,7 @@ import com.uem.ambulancias.coordinacion.domain.Derivacion;
 import com.uem.ambulancias.coordinacion.domain.EstadoDerivacion;
 import com.uem.ambulancias.coordinacion.domain.MotivoDeDerivacion;
 import com.uem.ambulancias.coordinacion.domain.OpcionDeDerivacion;
+import com.uem.ambulancias.protocolo.domain.Prioridad;
 
 /**
  * Un asunto que el sistema le pasó a la central, como lo ve la persona que lo tiene que decidir.
@@ -16,6 +17,7 @@ import com.uem.ambulancias.coordinacion.domain.OpcionDeDerivacion;
  * @param opciones        lo que puede contestar
  * @param opcionSegura    la que se aplica sola si nadie contesta antes de {@code venceEn}
  * @param necesitaAtencion si espera respuesta, o si venció y nadie la marcó como vista
+ * @param prioridad       la del incidente, o nulo si ninguna condición le fijó una
  */
 public record DerivacionResponse(
 		Long id,
@@ -35,7 +37,8 @@ public record DerivacionResponse(
 		Instant vistaEn,
 		String vistaPor,
 		Long evaluacionId,
-		boolean necesitaAtencion) {
+		boolean necesitaAtencion,
+		Prioridad prioridad) {
 
 	/** Una opción con el texto que se le muestra a la persona. */
 	public record Opcion(OpcionDeDerivacion codigo, String texto) {
@@ -61,7 +64,8 @@ public record DerivacionResponse(
 				derivacion.getVistaEn(),
 				derivacion.getVistaPor() == null ? null : derivacion.getVistaPor().getNombreCompleto(),
 				derivacion.getEvaluacion() == null ? null : derivacion.getEvaluacion().getId(),
-				derivacion.necesitaAtencion());
+				derivacion.necesitaAtencion(),
+				derivacion.getIncidente().getPrioridad());
 	}
 
 }

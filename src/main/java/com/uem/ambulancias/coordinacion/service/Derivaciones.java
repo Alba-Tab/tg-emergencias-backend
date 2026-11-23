@@ -2,6 +2,7 @@ package com.uem.ambulancias.coordinacion.service;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -13,6 +14,7 @@ import com.uem.ambulancias.coordinacion.domain.FuenteDelVeredicto;
 import com.uem.ambulancias.coordinacion.domain.MotivoDeDerivacion;
 import com.uem.ambulancias.coordinacion.domain.OpcionDeDerivacion;
 import com.uem.ambulancias.coordinacion.repository.DerivacionRepository;
+import com.uem.ambulancias.emergencias.domain.EstadoAtencion;
 import com.uem.ambulancias.emergencias.domain.EventoDelCaso;
 import com.uem.ambulancias.emergencias.domain.Incidente;
 import com.uem.ambulancias.emergencias.domain.OrigenDelEvento;
@@ -22,9 +24,11 @@ import com.uem.ambulancias.emergencias.repository.EventoDelCasoRepository;
 import com.uem.ambulancias.emergencias.repository.IncidenteRepository;
 import com.uem.ambulancias.emergencias.service.BitacoraDelCaso;
 import com.uem.ambulancias.emergencias.service.IncidenteActualizado;
+import com.uem.ambulancias.emergencias.service.IncidenteMasUrgente;
 import com.uem.ambulancias.emergencias.service.IncidenteSinUnidadParaAsignar;
 import com.uem.ambulancias.emergencias.service.RecursosDelIncidente;
 import com.uem.ambulancias.protocolo.domain.Condicion;
+import com.uem.ambulancias.protocolo.domain.Prioridad;
 import com.uem.ambulancias.usuarios.domain.RolUsuario;
 import com.uem.ambulancias.usuarios.domain.Usuario;
 import com.uem.ambulancias.usuarios.repository.UsuarioRepository;
@@ -40,6 +44,7 @@ import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 /**
  * La derivación a una persona: cuando el sistema no puede o no debe decidir solo, le pasa el asunto a quien está en
@@ -225,14 +230,74 @@ public class Derivaciones {
 								? datos.path("tipoQueFalta").asString() : null,
 						"unidadesRequeridas", incidente.getUnidadesRequeridas(),
 						"tipoMinimoRequerido", incidente.getTipoMinimoRequerido() == null ? null
-								: incidente.getTipoMinimoRequerido().name()),
+								: incidente.getTipoMinimoRequerido().name(),
+						"prioridad", incidente.getPrioridad() == null ? null : incidente.getPrioridad().name(),
+						"unidadesEnCasosMenores", unidadesEnCasosMenores(incidente)),
 				null);
 	}
 
-	/** Las que le hacen falta a una persona, la que vence antes primero. */
+	/**
+	 * El incidente pasó a ser más urgente mientras esperaba una unidad. La derivación por falta de unidad se abrió
+	 * antes de saberlo: se le agrega la prioridad y qué unidades están en casos menos urgentes, que es lo que la
+	 * persona necesita para decidir si mueve una.
+	 */
+	@TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+	@Transactional(propagation = Propagation.REQUIRES_NEW)
+	public void alVolverseMasUrgente(IncidenteMasUrgente evento) {
+		Incidente incidente = incidentes.buscarParaActualizar(evento.incidenteId()).orElse(null);
+		if (incidente == null || !incidente.getEstado().isAbierto() || incidente.getPrioridad() == null) {
+			return;
+		}
+		for (Derivacion derivacion : derivaciones.buscarAbiertasDeIncidente(incidente.getId())) {
+			if (derivacion.getMotivo() != MotivoDeDerivacion.SIN_UNIDAD) {
+				continue;
+			}
+			ObjectNode detalle = (ObjectNode) json.readTree(derivacion.getDetalle());
+			detalle.put("prioridad", incidente.getPrioridad().name());
+			List<Map<String, Object>> unidades = unidadesEnCasosMenores(incidente);
+			if (unidades == null) {
+				detalle.remove("unidadesEnCasosMenores");
+			} else {
+				detalle.set("unidadesEnCasosMenores", json.valueToTree(unidades));
+			}
+			derivacion.completarDetalle(json.writeValueAsString(detalle));
+			eventos.publishEvent(new DerivacionCambiada(derivacion.getId()));
+		}
+	}
+
+	/**
+	 * Las unidades que están atendiendo un caso menos urgente que este. Se le muestran a la persona cuando a un caso
+	 * amarillo o rojo le falta una unidad: mover una lo decide ella, el sistema no le quita una unidad a nadie.
+	 */
+	private List<Map<String, Object>> unidadesEnCasosMenores(Incidente incidente) {
+		Prioridad prioridad = incidente.getPrioridad();
+		if (prioridad == null || prioridad == Prioridad.VERDE) {
+			return null;
+		}
+		List<Map<String, Object>> unidades = atenciones
+				.buscarActivasDeOtrosIncidentes(incidente.getId(), EstadoAtencion.ACTIVOS).stream()
+				.filter(atencion -> prioridad.masUrgenteQue(atencion.getIncidente().getPrioridad()))
+				.map(atencion -> BitacoraDelCaso.datos(
+						"incidenteId", atencion.getIncidente().getId(),
+						"placa", atencion.getAmbulancia().getPlaca(),
+						"tipoUnidad", atencion.getAmbulancia().getTipoUnidad().name(),
+						"estado", atencion.getEstado().name(),
+						"prioridad", atencion.getIncidente().getPrioridad() == null ? null
+								: atencion.getIncidente().getPrioridad().name()))
+				.toList();
+		return unidades.isEmpty() ? null : unidades;
+	}
+
+	/**
+	 * Las que le hacen falta a una persona: primero las de los incidentes de prioridad más urgente y, a igual
+	 * prioridad, la que vence antes.
+	 */
 	@Transactional(readOnly = true)
 	public List<Derivacion> queNecesitanAtencion() {
-		return derivaciones.buscarQueNecesitanAtencion().stream().map(Derivaciones::cargada).toList();
+		return derivaciones.buscarQueNecesitanAtencion().stream().map(Derivaciones::cargada)
+				.sorted(Comparator.comparingInt(
+						(Derivacion derivacion) -> -Prioridad.nivelDe(derivacion.getIncidente().getPrioridad())))
+				.toList();
 	}
 
 	/** Las últimas, con cualquier estado. */
@@ -288,7 +353,7 @@ public class Derivaciones {
 
 	private void requerir(Incidente incidente, Condicion condicion, Derivacion derivacion) {
 		recursos.requerir(incidente, 1 + condicion.getUnidadesAdicionales(), condicion.getTipoMinimo(),
-				BitacoraDelCaso.datos(
+				condicion.getPrioridad(), BitacoraDelCaso.datos(
 						"derivacionId", derivacion.getId(),
 						"porCondiciones", List.of(condicion.getCodigo())));
 	}

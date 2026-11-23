@@ -80,6 +80,9 @@ public class PublicadorFirebase
 		if (incidente.tipoMinimoRequerido() != null) {
 			valores.put("tipoMinimoRequerido", incidente.tipoMinimoRequerido().name());
 		}
+		if (incidente.prioridad() != null) {
+			valores.put("prioridad", incidente.prioridad().name());
+		}
 		valores.put("actualizadoEn", Instant.now().toString());
 		EscriturasFirebase.registrarFallo(nodo(INCIDENTES_ABIERTOS, incidente.id()).setValueAsync(valores),
 				"publicar el incidente " + incidente.id());

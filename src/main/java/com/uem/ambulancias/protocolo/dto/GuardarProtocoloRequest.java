@@ -3,6 +3,7 @@ package com.uem.ambulancias.protocolo.dto;
 import java.util.List;
 
 import com.uem.ambulancias.flota.domain.TipoUnidad;
+import com.uem.ambulancias.protocolo.domain.Prioridad;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.DecimalMax;
@@ -78,7 +79,10 @@ public record GuardarProtocoloRequest(
 
 			/** Opcional: la condición se cumple cuando los afectados declarados llegan a esta cantidad. */
 			@Min(value = 1, message = "La cantidad de afectados debe ser al menos 1.")
-			Integer afectadosDesde) {
+			Integer afectadosDesde,
+
+			/** Opcional: la prioridad que como mínimo toma el caso cuando la condición se cumple. */
+			Prioridad prioridad) {
 	}
 
 }
