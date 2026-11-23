@@ -13,6 +13,7 @@ import com.uem.ambulancias.emergencias.dto.CancelarAlertaRequest;
 import com.uem.ambulancias.emergencias.dto.CrearAlertaRequest;
 import com.uem.ambulancias.emergencias.dto.DetallesAlertaRequest;
 import com.uem.ambulancias.emergencias.dto.ResponderFormularioRequest;
+import com.uem.ambulancias.emergencias.dto.PreguntaDelCasoResponse;
 import com.uem.ambulancias.emergencias.dto.RespuestaDelFormularioResponse;
 import com.uem.ambulancias.emergencias.service.FormularioDelCaso;
 import com.uem.ambulancias.emergencias.service.IncidenteService;
@@ -80,6 +81,15 @@ public class AlertaController {
 				.map(respuesta -> new RespuestaALaCondicion(respuesta.condicion().trim(), respuesta.valor()))
 				.toList();
 		return RespuestaDelFormularioResponse.de(formulario.responder(alertaId, usuarioId, respuestas));
+	}
+
+	/**
+	 * El formulario de la alerta: las preguntas del tipo de suceso de su incidente, con lo ya contestado. Las que el
+	 * sistema necesita ahora llegan primero y marcadas (PB-37). Lista vacía si el incidente no tiene tipo de suceso.
+	 */
+	@GetMapping("/{alertaId}/preguntas")
+	public List<PreguntaDelCasoResponse> preguntas(@PathVariable Long alertaId, @UsuarioActual Long usuarioId) {
+		return formulario.preguntasDe(alertaId, usuarioId).stream().map(PreguntaDelCasoResponse::de).toList();
 	}
 
 	/** Lo que el ciudadano ya contestó en esa alerta, para mostrarlo cuando vuelve a abrir la app. */

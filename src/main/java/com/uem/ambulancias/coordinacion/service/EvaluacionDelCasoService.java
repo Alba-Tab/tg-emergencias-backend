@@ -9,12 +9,14 @@ import java.util.Optional;
 import com.uem.ambulancias.comun.error.NoEncontradoException;
 import com.uem.ambulancias.coordinacion.domain.EvaluacionDelCaso;
 import com.uem.ambulancias.coordinacion.domain.MetodoDeEvaluacion;
+import com.uem.ambulancias.coordinacion.domain.ResultadoDeCondicion;
 import com.uem.ambulancias.coordinacion.repository.EvaluacionDelCasoRepository;
 import com.uem.ambulancias.emergencias.domain.Incidente;
 import com.uem.ambulancias.emergencias.domain.OrigenDelEvento;
 import com.uem.ambulancias.emergencias.domain.TipoEventoDelCaso;
 import com.uem.ambulancias.emergencias.repository.IncidenteRepository;
 import com.uem.ambulancias.emergencias.service.BitacoraDelCaso;
+import com.uem.ambulancias.emergencias.service.FormularioDelCaso;
 import com.uem.ambulancias.emergencias.service.RecursosDelIncidente;
 import com.uem.ambulancias.evidencias.service.FalloDelServicioIa.Desenlace;
 import com.uem.ambulancias.protocolo.domain.Condicion;
@@ -41,6 +43,7 @@ public class EvaluacionDelCasoService {
 	private final ArmadorDelEstado armador;
 	private final BitacoraDelCaso bitacora;
 	private final RecursosDelIncidente recursos;
+	private final FormularioDelCaso formulario;
 	private final CoordinacionProperties config;
 	private final JsonMapper json;
 
@@ -211,6 +214,21 @@ public class EvaluacionDelCasoService {
 						"tipoDeSuceso", tipo.getCodigo(),
 						"veredictos", detalle));
 		aplicarPlan(evaluacion, incidente, tipo, veredictos, false);
+		formulario.preguntar(incidente, porPreguntar(tipo, veredictos), evaluacion.getId());
+	}
+
+	/**
+	 * Las condiciones que conviene preguntarle al testigo: quedaron en duda o sin evaluar, el protocolo tiene una
+	 * pregunta para ellas y ningún testigo la contestó todavía. A quien ya dijo que no sabe no se le insiste.
+	 */
+	private static List<String> porPreguntar(TipoDeSuceso tipo, List<Veredicto> veredictos) {
+		return veredictos.stream()
+				.filter(veredicto -> veredicto.resultado() == ResultadoDeCondicion.EN_DUDA
+						|| veredicto.resultado() == ResultadoDeCondicion.SIN_EVALUAR)
+				.filter(veredicto -> veredicto.respuestaDelTestigo() == null)
+				.filter(veredicto -> tipo.buscarCondicion(veredicto.condicion()).orElseThrow().getPregunta() != null)
+				.map(Veredicto::condicion)
+				.toList();
 	}
 
 	/**
