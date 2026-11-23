@@ -2,6 +2,7 @@ package com.uem.ambulancias.emergencias.service;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 
 import com.uem.ambulancias.comun.error.CodigoError;
 import com.uem.ambulancias.comun.error.ConflictoException;
@@ -22,6 +23,8 @@ import com.uem.ambulancias.flota.domain.Ambulancia;
 import com.uem.ambulancias.flota.domain.EstadoAmbulancia;
 import com.uem.ambulancias.flota.repository.AmbulanciaRepository;
 import com.uem.ambulancias.flota.service.UnidadActualizada;
+import com.uem.ambulancias.protocolo.domain.Protocolo;
+import com.uem.ambulancias.protocolo.service.ProtocoloService;
 import com.uem.ambulancias.usuarios.domain.Usuario;
 
 import lombok.RequiredArgsConstructor;
@@ -41,6 +44,7 @@ public class IncidenteService {
 	private final BloqueoDeAgrupacion bloqueoDeAgrupacion;
 	private final AgrupacionProperties agrupacion;
 	private final BitacoraDelCaso bitacora;
+	private final ProtocoloService protocolos;
 	private final ApplicationEventPublisher eventos;
 
 	/**
@@ -50,6 +54,12 @@ public class IncidenteService {
 	 */
 	@Transactional
 	public Incidente agruparAlerta(Alerta alerta) {
+		return agruparAlerta(alerta, null);
+	}
+
+	/** Lo mismo, con el tipo de suceso que el ciudadano marcó al emitir, si marcó alguno (PB-30). */
+	@Transactional
+	public Incidente agruparAlerta(Alerta alerta, String tipoDeclarado) {
 		bloqueoDeAgrupacion.adquirir();
 
 		// La búsqueda no bloquea, y una unidad pudo cerrar el incidente en ese mismo instante. Por eso se lo vuelve a
@@ -77,6 +87,7 @@ public class IncidenteService {
 						"origenUbicacion", alerta.getOrigenUbicacion().name(),
 						"cantidadAfectados", alerta.getCantidadAfectados(),
 						"descripcion", alerta.getDescripcion()));
+		declararTipo(incidente, alerta, tipoDeclarado, alerta.getFechaHora());
 
 		// Un incidente recién creado todavía no tiene unidad en camino: hay que avisar a las disponibles.
 		eventos.publishEvent(new IncidenteActualizado(incidente.getId(), nuevo));
@@ -94,7 +105,8 @@ public class IncidenteService {
 	 * se le actualice el dato sin refrescar.
 	 */
 	@Transactional
-	public Alerta completarDetalles(Long alertaId, Long ciudadanoId, Integer cantidadAfectados, String descripcion) {
+	public Alerta completarDetalles(Long alertaId, Long ciudadanoId, Integer cantidadAfectados, String descripcion,
+			String tipoDeclarado) {
 		Long incidenteId = alertas.buscarIncidenteId(alertaId)
 				.orElseThrow(() -> new NoEncontradoException("No existe la alerta " + alertaId + "."));
 		Incidente incidente = incidentes.buscarParaActualizar(incidenteId)
@@ -126,10 +138,34 @@ public class IncidenteService {
 							"cantidadAfectados", cantidadAfectados,
 							"descripcion", descripcion));
 		}
+		declararTipo(incidente, alerta, tipoDeclarado, Instant.now());
 
 		eventos.publishEvent(new IncidenteActualizado(incidenteId, false));
 		eventos.publishEvent(new IncidenteConDatosNuevos(incidenteId));
 		return alerta;
+	}
+
+	/**
+	 * Lo que el ciudadano marcó como tipo de suceso (PB-30). Un código que el protocolo vigente no conoce no frena
+	 * nada: la alerta sigue sin tipo y queda anotado que llegó. El incidente se queda con el primer tipo que se
+	 * declaró; si otra alerta declara uno distinto también queda anotado, porque es una señal de que las fuentes no
+	 * coinciden.
+	 */
+	private void declararTipo(Incidente incidente, Alerta alerta, String codigo, Instant cuando) {
+		if (codigo == null) {
+			return;
+		}
+		Optional<Protocolo> vigente = protocolos.vigente();
+		boolean conocido = vigente.flatMap(protocolo -> protocolo.buscarTipo(codigo)).isPresent();
+		if (conocido) {
+			alerta.declararTipo(codigo);
+			incidente.declararTipo(vigente.get(), codigo);
+		}
+		bitacora.anotar(incidente, alerta, TipoEventoDelCaso.TIPO_DE_SUCESO_DECLARADO, OrigenDelEvento.CIUDADANO,
+				cuando, BitacoraDelCaso.datos(
+						"codigo", codigo,
+						"aceptado", conocido,
+						"tipoDelIncidente", incidente.getTipoSuceso()));
 	}
 
 	/**
