@@ -1,12 +1,18 @@
 package com.uem.ambulancias.integracion.ia;
 
 import java.net.http.HttpClient;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeParseException;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
+import com.uem.ambulancias.coordinacion.service.ModeloDeDecision;
+import com.uem.ambulancias.coordinacion.service.PedidoDeEvaluacion;
+import com.uem.ambulancias.coordinacion.service.ProbabilidadesRecibidas;
 import com.uem.ambulancias.evidencias.service.AnalisisRecibido;
 import com.uem.ambulancias.evidencias.service.FalloDelServicioIa;
 import com.uem.ambulancias.evidencias.service.FalloDelServicioIa.Desenlace;
@@ -18,6 +24,8 @@ import com.uem.ambulancias.evidencias.service.ServicioDeAnalisis;
 import com.uem.ambulancias.integracion.ia.ContratoIa.AnalysisRequest;
 import com.uem.ambulancias.integracion.ia.ContratoIa.AnalysisResponse;
 import com.uem.ambulancias.integracion.ia.ContratoIa.ErrorResponse;
+import com.uem.ambulancias.integracion.ia.ContratoIa.EvaluationRequest;
+import com.uem.ambulancias.integracion.ia.ContratoIa.EvaluationResponse;
 import com.uem.ambulancias.integracion.ia.ContratoIa.Provenance;
 import com.uem.ambulancias.integracion.ia.ContratoIa.SummaryRequest;
 import com.uem.ambulancias.integracion.ia.ContratoIa.SummaryResponse;
@@ -35,15 +43,18 @@ import org.springframework.web.client.RestClientException;
  * Llama al servicio de análisis por HTTP. Las llamadas son síncronas y largas: el timeout de lectura es mayor que el
  * peor caso del servicio. Cada error se traduce, según la tabla del servicio, en reintentar, firmar de nuevo, dar por
  * fallido o pedir revisión.
+ *
+ * <p>La evaluación de condiciones va por el mismo servicio, pero con su propio tiempo de espera, mucho más corto:
+ * una decisión de despacho no puede quedarse esperando lo que se espera un video.
  */
 @Slf4j
-public class ClienteIaHttp implements ServicioDeAnalisis {
+public class ClienteIaHttp implements ServicioDeAnalisis, ModeloDeDecision {
 
 	/** El archivo o el pedido no sirven: reintentar daría lo mismo. */
 	private static final Set<String> DEFINITIVOS = Set.of("invalid_request", "unsupported_media_type",
 			"evidence_empty", "evidence_too_large", "mime_mismatch", "checksum_mismatch", "duration_exceeded",
 			"unreadable_media", "object_not_found", "download_failed", "invalid_download_url", "unknown_alert",
-			"duplicate_source", "nothing_to_summarize", "too_many_sources");
+			"duplicate_source", "nothing_to_summarize", "too_many_sources", "state_too_large");
 
 	private static final Set<String> PASAJEROS = Set.of("download_unavailable", "provider_unavailable",
 			"invalid_model_output", "internal_error");
@@ -55,6 +66,9 @@ public class ClienteIaHttp implements ServicioDeAnalisis {
 
 	private final RestClient rest;
 
+	/** El mismo servicio, con el tiempo de espera corto de las decisiones. */
+	private final RestClient restDeDecisiones;
+
 	public ClienteIaHttp(IaProperties config) {
 		// Sin redirecciones: el servicio no las usa, y seguir una mandaría el token a otro lado. HTTP/1.1 porque
 		// uvicorn no habla HTTP/2: el cliente de Java pediría pasar a h2c y el servicio deja un aviso por cada pedido.
@@ -63,9 +77,14 @@ public class ClienteIaHttp implements ServicioDeAnalisis {
 				.connectTimeout(config.conexion())
 				.followRedirects(HttpClient.Redirect.NEVER)
 				.build();
+		this.rest = cliente(http, config, config.lectura());
+		this.restDeDecisiones = cliente(http, config, config.lecturaDeEvaluacion());
+	}
+
+	private static RestClient cliente(HttpClient http, IaProperties config, Duration lectura) {
 		JdkClientHttpRequestFactory fabrica = new JdkClientHttpRequestFactory(http);
-		fabrica.setReadTimeout(config.lectura());
-		this.rest = RestClient.builder()
+		fabrica.setReadTimeout(lectura);
+		return RestClient.builder()
 				.baseUrl(config.url())
 				.requestFactory(fabrica)
 				.defaultHeader(HttpHeaders.AUTHORIZATION, "Bearer " + config.token())
@@ -104,7 +123,49 @@ public class ClienteIaHttp implements ServicioDeAnalisis {
 				lista(respuesta.usedAlertIds()), procedencia(respuesta.provenance()));
 	}
 
+	@Override
+	public ProbabilidadesRecibidas evaluar(PedidoDeEvaluacion pedido) {
+		EvaluationRequest cuerpo = new EvaluationRequest(pedido.trabajo().toString(), pedido.incidenteId(),
+				pedido.estadoJson(), pedido.preguntas().stream()
+						.map(pregunta -> new ContratoIa.Question(pregunta.codigo(), pregunta.enunciado()))
+						.toList());
+		EvaluationResponse respuesta = llamar(restDeDecisiones, "/v1/evaluations", cuerpo, EvaluationResponse.class);
+		return new ProbabilidadesRecibidas(probabilidades(pedido, respuesta),
+				respuesta.provenance() == null ? null : respuesta.provenance().provider(),
+				respuesta.provenance() == null ? null : respuesta.provenance().model(),
+				respuesta.usage() == null ? null : respuesta.usage().inputTokens(),
+				respuesta.usage() == null ? null : respuesta.usage().cost());
+	}
+
+	/**
+	 * Una probabilidad por cada condición consultada, entre 0 y 1. Si falta alguna o viene fuera de rango, la
+	 * respuesta entera no sirve: decidir con la mitad de las condiciones sería decidir con otra pregunta.
+	 */
+	static Map<String, Double> probabilidades(PedidoDeEvaluacion pedido, EvaluationResponse respuesta) {
+		Map<String, Double> recibidas = new HashMap<>();
+		if (respuesta.answers() != null) {
+			for (ContratoIa.Answer answer : respuesta.answers()) {
+				if (answer != null && answer.code() != null && answer.probability() != null) {
+					recibidas.put(answer.code(), answer.probability());
+				}
+			}
+		}
+		Map<String, Double> probabilidades = new HashMap<>();
+		for (PedidoDeEvaluacion.Pregunta pregunta : pedido.preguntas()) {
+			Double probabilidad = recibidas.get(pregunta.codigo());
+			if (probabilidad == null || probabilidad.isNaN() || probabilidad < 0 || probabilidad > 1) {
+				throw new FalloDelServicioIa("respuesta_incompleta", Desenlace.REINTENTAR);
+			}
+			probabilidades.put(pregunta.codigo(), probabilidad);
+		}
+		return probabilidades;
+	}
+
 	private <T> T llamar(String ruta, Object cuerpo, Class<T> tipo) {
+		return llamar(rest, ruta, cuerpo, tipo);
+	}
+
+	private static <T> T llamar(RestClient rest, String ruta, Object cuerpo, Class<T> tipo) {
 		try {
 			return rest.post()
 					.uri(ruta)

@@ -7,8 +7,8 @@ import com.fasterxml.jackson.annotation.JsonRawValue;
 import tools.jackson.databind.JsonNode;
 
 /**
- * Los cuerpos de {@code /v1/analyses} y {@code /v1/summaries} tal como los define el servicio, con sus nombres en
- * inglés. Las respuestas ignoran los campos que no conocen, para que el servicio pueda sumar datos sin romper nada.
+ * Los cuerpos de {@code /v1/analyses}, {@code /v1/summaries} y {@code /v1/evaluations} tal como los define el
+ * servicio, con sus nombres en inglés. Las respuestas ignoran los campos que no conocen, para que el servicio pueda sumar datos sin romper nada.
  */
 final class ContratoIa {
 
@@ -46,6 +46,32 @@ final class ContratoIa {
 	@JsonIgnoreProperties(ignoreUnknown = true)
 	record SummaryResponse(JsonNode summary, List<Long> usedEvidenceIds, List<Long> usedAlertIds,
 			Provenance provenance) {
+	}
+
+	/** {@code state} ya es JSON: se escribe tal cual. */
+	record EvaluationRequest(String jobId, Long incidentId, @JsonRawValue String state, List<Question> questions) {
+
+		@Override
+		public String toString() {
+			// El estado lleva lo que se sabe del caso: no tiene por qué terminar en un registro por un toString.
+			return "EvaluationRequest[jobId=" + jobId + ", incidentId=" + incidentId + "]";
+		}
+
+	}
+
+	record Question(String code, String statement) {
+	}
+
+	@JsonIgnoreProperties(ignoreUnknown = true)
+	record EvaluationResponse(List<Answer> answers, Provenance provenance, Usage usage) {
+	}
+
+	@JsonIgnoreProperties(ignoreUnknown = true)
+	record Answer(String code, Double probability) {
+	}
+
+	@JsonIgnoreProperties(ignoreUnknown = true)
+	record Usage(Integer inputTokens, Double cost) {
 	}
 
 	@JsonIgnoreProperties(ignoreUnknown = true)
