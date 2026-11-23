@@ -129,16 +129,35 @@ public class ArmadorDelEstado {
 				!estado.path("evidencias").isEmpty(), decididas);
 	}
 
-	/** Las condiciones que ya decidió la central o que se dieron por cumplidas ante la duda. Vale la última. */
+	/**
+	 * Las condiciones que ya se decidieron fuera de las reglas y del modelo. De cada una vale la última decisión. Lo
+	 * que decidió la central, o lo que se dio por cumplido ante la duda, vale hasta el final. Lo que resolvió el agente
+	 * vale solo mientras no haya llegado un dato del suceso posterior a lo que él miró.
+	 */
 	private Map<String, JuicioDelProtocolo.Decidida> decididasDe(List<EventoDelCaso> bitacora) {
-		Map<String, JuicioDelProtocolo.Decidida> decididas = new LinkedHashMap<>();
+		record Decision(JuicioDelProtocolo.Decidida decidida, long hastaEvento) {
+		}
+		Map<String, Decision> decisiones = new LinkedHashMap<>();
+		long ultimoDato = -1;
 		for (EventoDelCaso evento : bitacora) {
 			if (evento.getTipo() != TipoEventoDelCaso.CONDICION_DECIDIDA) {
+				if (evento.getTipo().aportaDatosDelSuceso()) {
+					ultimoDato = evento.getId();
+				}
 				continue;
 			}
 			JsonNode datos = json.readTree(evento.getDatos());
-			decididas.put(datos.path("condicion").asString(), new JuicioDelProtocolo.Decidida(
-					datos.path("cumple").asBoolean(), FuenteDelVeredicto.valueOf(datos.path("por").asString())));
+			decisiones.put(datos.path("condicion").asString(), new Decision(
+					new JuicioDelProtocolo.Decidida(datos.path("cumple").asBoolean(),
+							FuenteDelVeredicto.valueOf(datos.path("por").asString())),
+					datos.path("hastaEvento").asLong(-1)));
+		}
+		Map<String, JuicioDelProtocolo.Decidida> decididas = new LinkedHashMap<>();
+		for (Map.Entry<String, Decision> decision : decisiones.entrySet()) {
+			boolean delAgente = decision.getValue().decidida().fuente() == FuenteDelVeredicto.AGENTE;
+			if (!delAgente || decision.getValue().hastaEvento() >= ultimoDato) {
+				decididas.put(decision.getKey(), decision.getValue().decidida());
+			}
 		}
 		return decididas;
 	}

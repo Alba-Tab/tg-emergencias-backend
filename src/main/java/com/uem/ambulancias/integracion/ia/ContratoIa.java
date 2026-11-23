@@ -7,7 +7,8 @@ import com.fasterxml.jackson.annotation.JsonRawValue;
 import tools.jackson.databind.JsonNode;
 
 /**
- * Los cuerpos de {@code /v1/analyses}, {@code /v1/summaries} y {@code /v1/evaluations} tal como los define el
+ * Los cuerpos de {@code /v1/analyses}, {@code /v1/summaries}, {@code /v1/evaluations} y
+ * {@code /v1/reasonings} tal como los define el
  * servicio, con sus nombres en inglés. Las respuestas ignoran los campos que no conocen, para que el servicio pueda sumar datos sin romper nada.
  */
 final class ContratoIa {
@@ -72,6 +73,20 @@ final class ContratoIa {
 
 	@JsonIgnoreProperties(ignoreUnknown = true)
 	record Usage(Integer inputTokens, Double cost) {
+	}
+
+	/** El pedido de razonamiento tiene la misma forma que el de evaluación. */
+	@JsonIgnoreProperties(ignoreUnknown = true)
+	record ReasoningResponse(List<Conclusion> conclusions, List<String> toolCalls, Provenance provenance,
+			ReasoningUsage usage) {
+	}
+
+	@JsonIgnoreProperties(ignoreUnknown = true)
+	record Conclusion(String code, String verdict, String rationale, List<String> sources) {
+	}
+
+	@JsonIgnoreProperties(ignoreUnknown = true)
+	record ReasoningUsage(Integer inputTokens, Integer outputTokens, Integer requests) {
 	}
 
 	@JsonIgnoreProperties(ignoreUnknown = true)

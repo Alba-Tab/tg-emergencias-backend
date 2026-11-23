@@ -65,9 +65,12 @@ public enum TipoEventoDelCaso {
 
 	/**
 	 * Una condición quedó decidida fuera de las reglas y del modelo: la decidió la central, o se dio por cumplida
-	 * ante la duda porque nadie contestó.
+	 * ante la duda porque nadie contestó, o la resolvió el agente razonando.
 	 */
-	CONDICION_DECIDIDA;
+	CONDICION_DECIDIDA,
+
+	/** El agente razonó sobre las condiciones en duda: qué herramientas usó y a qué llegó en cada una. */
+	RAZONAMIENTO_DEL_AGENTE;
 
 	/**
 	 * Si el renglón trae algo nuevo sobre lo que pasa en el lugar. Son los que piden volver a evaluar las condiciones

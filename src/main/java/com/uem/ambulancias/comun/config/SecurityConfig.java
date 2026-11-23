@@ -7,6 +7,7 @@ import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
 
 import com.nimbusds.jose.jwk.source.ImmutableSecret;
+import jakarta.servlet.http.HttpServletRequest;
 import com.uem.ambulancias.seguridad.service.SeguridadProperties;
 import com.uem.ambulancias.seguridad.service.TokenService;
 import com.uem.ambulancias.seguridad.service.ValidadorDeSesionVigente;
@@ -29,6 +30,7 @@ import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
+import org.springframework.security.oauth2.server.resource.web.DefaultBearerTokenResolver;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
@@ -45,6 +47,9 @@ public class SecurityConfig {
 	private static final String PARAMEDICO = RolUsuario.PARAMEDICO.name();
 	private static final String CIUDADANO = RolUsuario.CIUDADANO.name();
 
+	private static final String RUTA_DEL_AGENTE = "/mcp";
+	private static final DefaultBearerTokenResolver TOKEN_DEL_ENCABEZADO = new DefaultBearerTokenResolver();
+
 	@Bean
 	SecurityFilterChain securityFilterChain(HttpSecurity http, JwtAuthenticationConverter convertidor) throws Exception {
 		return http
@@ -56,6 +61,9 @@ public class SecurityConfig {
 						.requestMatchers("/auth/**").permitAll()
 						// Sin esto, un 404 o un 500 se reenvían a /error, que queda denegado, y el cliente ve un 403 que engaña.
 						.requestMatchers("/error").permitAll()
+						// La puerta de herramientas del agente: no entra con la sesión de un usuario, sino con el token
+						// entre servicios que revisa su propio controlador. Sin ese token configurado, responde 404.
+						.requestMatchers(RUTA_DEL_AGENTE).permitAll()
 						// Renovar la sesión de una app: se llega con el token, por eso no está entre las puertas de /auth.
 						.requestMatchers(HttpMethod.POST, "/sesion/renovacion").hasAnyRole(CIUDADANO, PARAMEDICO)
 						// Lo que usa la app del paramédico. Va primero porque /paramedicos/** es del administrador.
@@ -90,7 +98,8 @@ public class SecurityConfig {
 						.requestMatchers(HttpMethod.GET, "/traslados/mios").hasRole(CIUDADANO)
 						// Lo que usa el panel.
 						.requestMatchers(HttpMethod.GET, "/incidentes", "/incidentes/*", "/incidentes/*/unidades",
-								"/incidentes/*/bitacora", "/incidentes/*/evaluaciones", "/incidentes/*/derivaciones")
+								"/incidentes/*/bitacora", "/incidentes/*/evaluaciones", "/incidentes/*/derivaciones",
+								"/incidentes/*/razonamientos")
 						.hasRole(ADMIN)
 						.requestMatchers(HttpMethod.POST, "/incidentes/*/despacho", "/incidentes/*/cierre").hasRole(ADMIN)
 						.requestMatchers(HttpMethod.GET, "/traslados", "/traslados/problemas", "/traslados/*",
@@ -106,8 +115,20 @@ public class SecurityConfig {
 						.requestMatchers("/cobros", "/cobros/**", "/tarifas", "/tarifas/**").hasRole(ADMIN)
 						.requestMatchers("/ambulancias/**", "/asignaciones/**", "/paramedicos/**").hasRole(ADMIN)
 						.anyRequest().authenticated())
-				.oauth2ResourceServer(recurso -> recurso.jwt(jwt -> jwt.jwtAuthenticationConverter(convertidor)))
+				.oauth2ResourceServer(recurso -> recurso
+						.bearerTokenResolver(SecurityConfig::tokenDeSesion)
+						.jwt(jwt -> jwt.jwtAuthenticationConverter(convertidor)))
 				.build();
+	}
+
+	/**
+	 * El token de sesión de la petición. En {@code /mcp} no hay ninguno: ahí el encabezado trae el token entre
+	 * servicios del agente, y si se intentara leer como una sesión la petición se rechazaría antes de llegar a su
+	 * controlador, que es el que lo revisa.
+	 */
+	private static String tokenDeSesion(HttpServletRequest peticion) {
+		String ruta = peticion.getRequestURI().substring(peticion.getContextPath().length());
+		return RUTA_DEL_AGENTE.equals(ruta) ? null : TOKEN_DEL_ENCABEZADO.resolve(peticion);
 	}
 
 	/** El rol viaja como un dato del token; acá se traduce a lo que entienden las reglas de arriba. */

@@ -32,7 +32,16 @@ public record IaProperties(
 		 * Cuánto se espera la respuesta del modelo de decisión. Es una sola llamada corta, pero el servicio la intenta
 		 * dos veces con 15 segundos cada una: menos que eso cortaría una respuesta que estaba por llegar.
 		 */
-		@DefaultValue("40") int segundosLecturaEvaluacion) {
+		@DefaultValue("40") int segundosLecturaEvaluacion,
+
+		/**
+		 * Si lo que queda en duda pasa por el agente antes de ir a una persona. Necesita que el servicio de IA tenga
+		 * configurado el servidor de herramientas de esta central ({@code sga.agente.token}).
+		 */
+		@DefaultValue("false") boolean razonamientoHabilitado,
+
+		/** Cuánto se espera un razonamiento: el agente da varios pasos y cada uno es un pedido a un modelo. */
+		@DefaultValue("90") int segundosLecturaRazonamiento) {
 
 	public Duration conexion() {
 		return Duration.ofSeconds(segundosConexion);
@@ -44,6 +53,10 @@ public record IaProperties(
 
 	public Duration lecturaDeEvaluacion() {
 		return Duration.ofSeconds(segundosLecturaEvaluacion);
+	}
+
+	public Duration lecturaDeRazonamiento() {
+		return Duration.ofSeconds(segundosLecturaRazonamiento);
 	}
 
 }
