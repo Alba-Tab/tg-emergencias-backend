@@ -9,6 +9,7 @@ import com.uem.ambulancias.coordinacion.domain.ResultadoDeCondicion;
 import com.uem.ambulancias.emergencias.domain.RespuestaDelTestigo;
 import com.uem.ambulancias.flota.domain.TipoUnidad;
 import com.uem.ambulancias.protocolo.domain.Condicion;
+import com.uem.ambulancias.protocolo.domain.Prioridad;
 import com.uem.ambulancias.protocolo.domain.TipoDeSuceso;
 
 /**
@@ -121,11 +122,13 @@ public final class JuicioDelProtocolo {
 
 	/**
 	 * Lo que el caso necesita según las condiciones que se cumplen. Las unidades no se suman entre condiciones: vale
-	 * la que más pide, como en un plan de despacho por determinantes. El tipo mínimo es el mayor de los que piden.
+	 * la que más pide, como en un plan de despacho por determinantes. El tipo mínimo es el mayor de los que piden, y
+	 * la prioridad, la más urgente.
 	 */
 	public static PlanDeRespuesta plan(TipoDeSuceso tipo, List<Veredicto> veredictos) {
 		int adicionales = 0;
 		TipoUnidad tipoMinimo = null;
+		Prioridad prioridad = null;
 		List<String> porCondiciones = new ArrayList<>();
 		for (Veredicto veredicto : veredictos) {
 			if (!veredicto.cumplida()) {
@@ -137,11 +140,13 @@ public final class JuicioDelProtocolo {
 				tipoMinimo = tipoMinimo == null ? condicion.getTipoMinimo()
 						: TipoUnidad.elMayor(tipoMinimo, condicion.getTipoMinimo());
 			}
-			if (condicion.getUnidadesAdicionales() > 0 || condicion.getTipoMinimo() != null) {
+			prioridad = Prioridad.laMayor(prioridad, condicion.getPrioridad());
+			if (condicion.getUnidadesAdicionales() > 0 || condicion.getTipoMinimo() != null
+					|| condicion.getPrioridad() != null) {
 				porCondiciones.add(condicion.getCodigo());
 			}
 		}
-		return new PlanDeRespuesta(1 + adicionales, tipoMinimo, List.copyOf(porCondiciones));
+		return new PlanDeRespuesta(1 + adicionales, tipoMinimo, prioridad, List.copyOf(porCondiciones));
 	}
 
 	static ResultadoDeCondicion segunUmbrales(Condicion condicion, double probabilidad) {

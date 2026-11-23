@@ -6,6 +6,7 @@ import com.uem.ambulancias.comun.error.CodigoError;
 import com.uem.ambulancias.comun.error.ConflictoException;
 import com.uem.ambulancias.comun.geo.Geo;
 import com.uem.ambulancias.flota.domain.TipoUnidad;
+import com.uem.ambulancias.protocolo.domain.Prioridad;
 import com.uem.ambulancias.protocolo.domain.Protocolo;
 import com.uem.ambulancias.usuarios.domain.Usuario;
 
@@ -85,6 +86,13 @@ public class Incidente {
 	@Enumerated(EnumType.STRING)
 	private TipoUnidad tipoMinimoRequerido;
 
+	/**
+	 * Qué tan urgente es el caso según el protocolo. Sin dato, nada dijo que urja más que otro. Solo sube: bajarla
+	 * sería quitarle el lugar a un caso, y eso lo decide una persona.
+	 */
+	@Enumerated(EnumType.STRING)
+	private Prioridad prioridad;
+
 	/** ME-1 I0: nace ACTIVO con la ubicación efectiva y los afectados de su primera alerta. */
 	public static Incidente crear(Point ubicacion, Integer cantidadAfectados, Instant fechaHoraCreacion) {
 		Incidente incidente = new Incidente();
@@ -141,6 +149,15 @@ public class Incidente {
 			subio = true;
 		}
 		return subio;
+	}
+
+	/** Sube la prioridad del caso. Una igual o menos urgente que la que ya tiene no cambia nada. */
+	public boolean priorizar(Prioridad nueva) {
+		if (nueva == null || (prioridad != null && nueva.compareTo(prioridad) <= 0)) {
+			return false;
+		}
+		prioridad = nueva;
+		return true;
 	}
 
 	/** Cierre deducido por el sistema a partir de lo que reportaron las unidades. */

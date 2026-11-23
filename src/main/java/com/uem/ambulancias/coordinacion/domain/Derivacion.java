@@ -176,6 +176,13 @@ public class Derivacion {
 	}
 
 	/** Alguien se da por enterado de una que venció sin respuesta. Lo ya aplicado no cambia. */
+	/** Reemplaza el paquete mientras espera respuesta, cuando se sabe algo más que la persona necesita ver. */
+	public void completarDetalle(String detalle) {
+		if (isAbierta()) {
+			this.detalle = detalle;
+		}
+	}
+
 	public void marcarVista(Usuario persona, Instant ahora) {
 		if (getEstado() != EstadoDerivacion.VENCIDA) {
 			throw new ConflictoException(CodigoError.DERIVACION_CERRADA,

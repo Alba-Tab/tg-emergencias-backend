@@ -70,8 +70,9 @@ public interface IncidenteRepository extends JpaRepository<Incidente, Long> {
 
 	/**
 	 * Los incidentes abiertos a los que les puede faltar una unidad: los que nadie está cubriendo y los que piden más
-	 * de una unidad o una de cierto tipo. Solo los ids, del más viejo al más nuevo: quien les asigne una unidad los
-	 * relee bloqueados y ahí confirma si de verdad les falta.
+	 * de una unidad o una de cierto tipo. Solo los ids, primero los de prioridad más urgente y, a igual prioridad, del
+	 * más viejo al más nuevo: quien les asigne una unidad los relee bloqueados y ahí confirma si de verdad les falta.
+	 * Un caso sin prioridad se ordena como uno verde.
 	 */
 	@Query("""
 			select i.id from Incidente i
@@ -79,7 +80,8 @@ public interface IncidenteRepository extends JpaRepository<Incidente, Long> {
 			       and not exists (select a from Atencion a where a.incidente = i and a.estado in :activos))
 			   or (i.estado in ('ACTIVO', 'EN_ATENCION')
 			       and (i.unidadesRequeridas > 1 or i.tipoMinimoRequerido is not null))
-			order by i.fechaHoraCreacion, i.id
+			order by case when i.prioridad = 'ROJA' then 0 when i.prioridad = 'AMARILLA' then 1 else 2 end,
+			         i.fechaHoraCreacion, i.id
 			""")
 	List<Long> buscarIdsQuePuedenNecesitarUnidadCon(@Param("activos") Collection<EstadoAtencion> activos);
 

@@ -310,7 +310,9 @@ public class EvaluacionDelCasoService {
 								"cita", condicion.getCita(),
 								"unidadesAdicionales", condicion.getUnidadesAdicionales(),
 								"tipoMinimo", condicion.getTipoMinimo() == null ? null
-										: condicion.getTipoMinimo().name()),
+										: condicion.getTipoMinimo().name(),
+								"prioridad", condicion.getPrioridad() == null ? null
+										: condicion.getPrioridad().name()),
 						"veredicto", BitacoraDelCaso.datos(
 								"resultado", veredicto.resultado().name(),
 								"fuente", veredicto.fuente() == null ? null : veredicto.fuente().name(),
@@ -344,7 +346,7 @@ public class EvaluacionDelCasoService {
 	private void aplicarPlan(EvaluacionDelCaso evaluacion, Incidente incidente, TipoDeSuceso tipo,
 			List<Veredicto> veredictos, boolean adelantado) {
 		PlanDeRespuesta plan = JuicioDelProtocolo.plan(tipo, veredictos);
-		recursos.requerir(incidente, plan.unidades(), plan.tipoMinimo(), BitacoraDelCaso.datos(
+		recursos.requerir(incidente, plan.unidades(), plan.tipoMinimo(), plan.prioridad(), BitacoraDelCaso.datos(
 				"evaluacionId", evaluacion.getId(),
 				"porCondiciones", plan.porCondiciones(),
 				"antesDelModelo", adelantado ? true : null));

@@ -9,6 +9,7 @@ import com.uem.ambulancias.emergencias.domain.EstadoIncidente;
 import com.uem.ambulancias.emergencias.domain.Incidente;
 import com.uem.ambulancias.emergencias.domain.MotivoCierreIncidente;
 import com.uem.ambulancias.flota.domain.TipoUnidad;
+import com.uem.ambulancias.protocolo.domain.Prioridad;
 
 /**
  * Detalle de un incidente en la consulta del panel: los mismos campos del resumen, sus alertas en orden de emisión y
@@ -39,7 +40,10 @@ public record IncidenteDetalleResponse(
 		int unidadesRequeridas,
 
 		/** El tipo de unidad que como mínimo tiene que ir. Nulo si alcanza cualquiera. */
-		TipoUnidad tipoMinimoRequerido) {
+		TipoUnidad tipoMinimoRequerido,
+
+		/** Qué tan urgente es según el protocolo. Nulo si ninguna condición fijó una prioridad. */
+		Prioridad prioridad) {
 
 	/**
 	 * {@code alertas} con su emisor y {@code atenciones} con su ambulancia, su paramédico responsable y su centro de
@@ -65,7 +69,8 @@ public record IncidenteDetalleResponse(
 				incidente.getDetalleCierre(),
 				incidente.getTipoSuceso(),
 				incidente.getUnidadesRequeridas(),
-				incidente.getTipoMinimoRequerido());
+				incidente.getTipoMinimoRequerido(),
+				incidente.getPrioridad());
 	}
 
 }

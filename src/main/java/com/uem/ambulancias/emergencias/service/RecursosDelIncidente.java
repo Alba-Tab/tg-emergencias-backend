@@ -8,6 +8,7 @@ import com.uem.ambulancias.emergencias.domain.Incidente;
 import com.uem.ambulancias.emergencias.domain.OrigenDelEvento;
 import com.uem.ambulancias.emergencias.domain.TipoEventoDelCaso;
 import com.uem.ambulancias.flota.domain.TipoUnidad;
+import com.uem.ambulancias.protocolo.domain.Prioridad;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
@@ -16,9 +17,9 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Lo que un incidente necesita: cuántas unidades y de qué tipo como mínimo. Nace en una unidad de cualquier tipo y
- * solo sube. El sistema suma recursos cuando el protocolo lo pide; quitar una unidad, cambiarla o cancelar el caso lo
- * decide siempre una persona.
+ * Lo que un incidente necesita: cuántas unidades, de qué tipo como mínimo y con qué prioridad. Nace en una unidad
+ * de cualquier tipo, sin prioridad, y solo sube. El sistema suma recursos cuando el protocolo lo pide; quitar una
+ * unidad, cambiarla o cancelar el caso lo decide siempre una persona.
  */
 @Service
 @RequiredArgsConstructor
@@ -35,10 +36,14 @@ public class RecursosDelIncidente {
 	 * @return si algo subió
 	 */
 	@Transactional(propagation = Propagation.MANDATORY)
-	public boolean requerir(Incidente incidente, int unidades, TipoUnidad tipoMinimo, Map<String, Object> porQue) {
+	public boolean requerir(Incidente incidente, int unidades, TipoUnidad tipoMinimo, Prioridad prioridad,
+			Map<String, Object> porQue) {
 		int unidadesAntes = incidente.getUnidadesRequeridas();
 		TipoUnidad tipoAntes = incidente.getTipoMinimoRequerido();
-		if (!incidente.requerir(unidades, tipoMinimo)) {
+		Prioridad prioridadAntes = incidente.getPrioridad();
+		boolean pideMas = incidente.requerir(unidades, tipoMinimo);
+		boolean urgeMas = incidente.priorizar(prioridad);
+		if (!pideMas && !urgeMas) {
 			return false;
 		}
 		TipoUnidad tipoAhora = incidente.getTipoMinimoRequerido();
@@ -46,11 +51,18 @@ public class RecursosDelIncidente {
 				"unidades", incidente.getUnidadesRequeridas(),
 				"tipoMinimo", tipoAhora == null ? null : tipoAhora.name(),
 				"unidadesAntes", unidadesAntes,
-				"tipoMinimoAntes", tipoAntes == null ? null : tipoAntes.name()));
+				"tipoMinimoAntes", tipoAntes == null ? null : tipoAntes.name(),
+				"prioridad", incidente.getPrioridad() == null ? null : incidente.getPrioridad().name(),
+				"prioridadAntes", prioridadAntes == null ? null : prioridadAntes.name()));
 		datos.putAll(porQue);
 		bitacora.anotar(incidente, null, TipoEventoDelCaso.PLAN_DE_RESPUESTA_ACTUALIZADO, OrigenDelEvento.SISTEMA,
 				Instant.now(), datos);
-		eventos.publishEvent(new IncidenteRequiereRecursos(incidente.getId()));
+		if (pideMas) {
+			eventos.publishEvent(new IncidenteRequiereRecursos(incidente.getId()));
+		}
+		if (urgeMas) {
+			eventos.publishEvent(new IncidenteMasUrgente(incidente.getId()));
+		}
 		eventos.publishEvent(new IncidenteActualizado(incidente.getId(), false));
 		return true;
 	}

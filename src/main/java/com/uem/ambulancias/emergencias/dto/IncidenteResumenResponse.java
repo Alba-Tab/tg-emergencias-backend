@@ -7,6 +7,7 @@ import com.uem.ambulancias.emergencias.domain.Atencion;
 import com.uem.ambulancias.emergencias.domain.EstadoIncidente;
 import com.uem.ambulancias.emergencias.domain.Incidente;
 import com.uem.ambulancias.emergencias.domain.MotivoCierreIncidente;
+import com.uem.ambulancias.protocolo.domain.Prioridad;
 
 /**
  * Incidente en la consulta del panel. {@code unidades} son las placas distintas de todas sus atenciones, en orden de
@@ -23,7 +24,9 @@ public record IncidenteResumenResponse(
 		Integer cantidadAfectados,
 		long cantidadAlertas,
 		List<String> unidades,
-		long unidadesAcudiendo) {
+		long unidadesAcudiendo,
+		/** Qué tan urgente es según el protocolo. Nulo si ninguna condición fijó una prioridad. */
+		Prioridad prioridad) {
 
 	/** {@code atenciones}: todas las del incidente con su ambulancia, en orden de toma. */
 	public static IncidenteResumenResponse de(Incidente incidente, long cantidadAlertas, List<Atencion> atenciones) {
@@ -38,7 +41,8 @@ public record IncidenteResumenResponse(
 				incidente.getCantidadAfectados(),
 				cantidadAlertas,
 				atenciones.stream().map(atencion -> atencion.getAmbulancia().getPlaca()).distinct().toList(),
-				atenciones.stream().filter(atencion -> atencion.getEstado().isActiva()).count());
+				atenciones.stream().filter(atencion -> atencion.getEstado().isActiva()).count(),
+				incidente.getPrioridad());
 	}
 
 }

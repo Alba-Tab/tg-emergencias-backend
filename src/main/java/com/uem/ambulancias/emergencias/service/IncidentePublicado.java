@@ -6,11 +6,12 @@ import java.util.List;
 import com.uem.ambulancias.emergencias.domain.EstadoIncidente;
 import com.uem.ambulancias.emergencias.domain.Incidente;
 import com.uem.ambulancias.flota.domain.TipoUnidad;
+import com.uem.ambulancias.protocolo.domain.Prioridad;
 
 /**
  * Lo que ven las unidades de un incidente abierto antes de tomarlo: ubicación, tiempo desde la creación,
  * afectados, descripciones de sus alertas, cuántas unidades ya acuden y cuántas necesita, con el tipo mínimo si el
- * protocolo pidió uno.
+ * protocolo pidió uno, y la prioridad si alguna condición la fijó.
  */
 public record IncidentePublicado(
 		Long id,
@@ -22,7 +23,8 @@ public record IncidentePublicado(
 		List<String> descripciones,
 		long unidadesAcudiendo,
 		int unidadesRequeridas,
-		TipoUnidad tipoMinimoRequerido) {
+		TipoUnidad tipoMinimoRequerido,
+		Prioridad prioridad) {
 
 	public static IncidentePublicado de(Incidente incidente, List<String> descripciones, long unidadesAcudiendo) {
 		return new IncidentePublicado(
@@ -35,7 +37,8 @@ public record IncidentePublicado(
 				descripciones,
 				unidadesAcudiendo,
 				incidente.getUnidadesRequeridas(),
-				incidente.getTipoMinimoRequerido());
+				incidente.getTipoMinimoRequerido(),
+				incidente.getPrioridad());
 	}
 
 }
