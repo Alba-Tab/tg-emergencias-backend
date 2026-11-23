@@ -24,12 +24,13 @@ public record ProtocoloResponse(Long id, int version, EstadoProtocolo estado, St
 
 	public record CondicionDelTipo(String codigo, String enunciado, String pregunta, double umbralActuar,
 			double umbralPreguntar, int unidadesAdicionales, TipoUnidad tipoMinimo, boolean derivaAPersona,
-			String cita) {
+			String cita, Integer afectadosDesde) {
 
 		static CondicionDelTipo de(Condicion condicion) {
 			return new CondicionDelTipo(condicion.getCodigo(), condicion.getEnunciado(), condicion.getPregunta(),
 					condicion.getUmbralActuar(), condicion.getUmbralPreguntar(), condicion.getUnidadesAdicionales(),
-					condicion.getTipoMinimo(), condicion.isDerivaAPersona(), condicion.getCita());
+					condicion.getTipoMinimo(), condicion.isDerivaAPersona(), condicion.getCita(),
+					condicion.getAfectadosDesde());
 		}
 
 	}

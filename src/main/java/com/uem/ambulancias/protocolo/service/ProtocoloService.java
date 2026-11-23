@@ -145,7 +145,7 @@ public class ProtocoloService {
 				condicion.umbralActuar(), condicion.umbralPreguntar(),
 				condicion.unidadesAdicionales() == null ? 0 : condicion.unidadesAdicionales(),
 				condicion.tipoMinimo(), Boolean.TRUE.equals(condicion.derivaAPersona()),
-				Textos.opcional(condicion.cita()));
+				Textos.opcional(condicion.cita()), condicion.afectadosDesde());
 	}
 
 	/** Recorre los tipos y sus condiciones mientras la transacción sigue abierta. */
