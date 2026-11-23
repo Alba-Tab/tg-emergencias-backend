@@ -68,6 +68,10 @@ public class SecurityConfig {
 						.requestMatchers(HttpMethod.GET, "/centros-salud").hasAnyRole(PARAMEDICO, CIUDADANO, ADMIN)
 						// El catálogo lo leen todos, pero solo la central lo mantiene.
 						.requestMatchers("/centros-salud", "/centros-salud/**").hasRole(ADMIN)
+						// El formulario que arma la app sale del protocolo vigente: lo leen todos, pero solo la central
+						// mantiene el protocolo.
+						.requestMatchers(HttpMethod.GET, "/formulario/**").hasAnyRole(PARAMEDICO, CIUDADANO, ADMIN)
+						.requestMatchers("/protocolos", "/protocolos/**").hasRole(ADMIN)
 						// ME-1 M5: la ambulancia vuelve de una avería desde la app (PB-05 R11) o desde el panel.
 						.requestMatchers(HttpMethod.POST, "/ambulancias/*/reactivar").hasAnyRole(PARAMEDICO, ADMIN)
 						// El resumen de la IA y los archivos que lo respaldan: el panel y la app del paramédico.
