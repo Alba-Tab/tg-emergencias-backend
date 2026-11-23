@@ -115,6 +115,7 @@ public class SecurityConfig {
 						.requestMatchers("/operacion/**", "/operacion").hasRole(ADMIN)
 						.requestMatchers("/despacho/**").hasRole(ADMIN)
 						.requestMatchers("/derivaciones", "/derivaciones/**").hasRole(ADMIN)
+						.requestMatchers("/norma", "/norma/**", "/memoria-de-casos").hasRole(ADMIN)
 						.requestMatchers("/reportes/**").hasRole(ADMIN)
 						.requestMatchers("/cobros", "/cobros/**", "/tarifas", "/tarifas/**").hasRole(ADMIN)
 						.requestMatchers("/ambulancias/**", "/asignaciones/**", "/paramedicos/**").hasRole(ADMIN)

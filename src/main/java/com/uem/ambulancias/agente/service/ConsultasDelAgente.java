@@ -31,6 +31,8 @@ import com.uem.ambulancias.flota.domain.TipoUnidad;
 import com.uem.ambulancias.flota.repository.AmbulanciaRepository;
 import com.uem.ambulancias.flota.repository.TripulantesEnTurno;
 import com.uem.ambulancias.flota.repository.TurnoRepository;
+import com.uem.ambulancias.memoria.service.IndiceDeLaNorma;
+import com.uem.ambulancias.memoria.service.MemoriaDeCasos;
 import com.uem.ambulancias.protocolo.domain.Condicion;
 import com.uem.ambulancias.protocolo.domain.Protocolo;
 import com.uem.ambulancias.protocolo.domain.TipoDeSuceso;
@@ -187,44 +189,66 @@ public class ConsultasDelAgente {
 	}
 
 	/**
-	 * Incidentes ya cerrados del mismo tipo de suceso, del más reciente al más viejo: cómo terminaron, cuántas
-	 * unidades fueron y qué condiciones se cumplieron. Sirven de referencia, no de regla.
+	 * Incidentes ya cerrados que sirven de referencia: cómo terminaron, cuántas unidades fueron y qué condiciones se
+	 * cumplieron. Si la memoria de casos encontró parecidos van esos, del más parecido al menos; si no, los últimos del
+	 * mismo tipo de suceso. Son una referencia, no una regla.
+	 *
+	 * @param parecidos lo que encontró la memoria de casos; vacío si está apagada o no encontró nada
 	 */
 	@Transactional(readOnly = true)
-	public Map<String, Object> buscarCasosParecidos(long incidenteId) {
+	public Map<String, Object> buscarCasosParecidos(long incidenteId, List<MemoriaDeCasos.Parecido> parecidos) {
 		Incidente incidente = incidente(incidenteId);
 		if (incidente.getTipoSuceso() == null) {
 			throw new ErrorDeHerramienta("El incidente " + incidenteId
 					+ " no tiene un tipo de suceso declarado: no hay con qué buscar casos parecidos.");
 		}
-		List<Map<String, Object>> parecidos = new ArrayList<>();
-		for (Incidente anterior : incidentes.buscarCerradosDelTipo(incidente.getTipoSuceso(), incidenteId,
-				PageRequest.of(0, config.casosParecidos()))) {
-			List<TipoUnidad> fueron = atenciones.buscarTiposDeUnidadVigentes(anterior.getId());
-			Map<String, Object> caso = new LinkedHashMap<>();
-			caso.put("incidenteId", anterior.getId());
-			caso.put("comoTermino", anterior.getEstado().name());
-			caso.put("motivoDeCierre", anterior.getMotivoCierre() == null ? null : anterior.getMotivoCierre().name());
-			caso.put("afectadosDeclarados", anterior.getCantidadAfectados());
-			caso.put("unidadesQueFueron", fueron.stream().map(Enum::name).toList());
-			caso.put("necesitaba", necesita(anterior));
-			caso.put("condicionesCumplidas", evaluaciones.buscarUltimaHecha(anterior.getId())
-					.map(ultima -> cumplidas(json.readTree(ultima.getVeredictos())))
-					.orElse(List.of()));
-			parecidos.add(caso);
+		List<Map<String, Object>> casos = new ArrayList<>();
+		for (MemoriaDeCasos.Parecido parecido : parecidos) {
+			incidentes.findById(parecido.incidenteId()).ifPresent(anterior -> {
+				Map<String, Object> caso = casoAnterior(anterior);
+				caso.put("similitud", redondear(parecido.similitud()));
+				casos.add(caso);
+			});
+		}
+		boolean porParecido = !casos.isEmpty();
+		if (!porParecido) {
+			for (Incidente anterior : incidentes.buscarCerradosDelTipo(incidente.getTipoSuceso(), incidenteId,
+					PageRequest.of(0, config.casosParecidos()))) {
+				casos.add(casoAnterior(anterior));
+			}
 		}
 		Map<String, Object> respuesta = new LinkedHashMap<>();
 		respuesta.put("tipoDeSuceso", incidente.getTipoSuceso());
-		respuesta.put("casos", parecidos);
+		respuesta.put("busqueda", porParecido ? "POR_PARECIDO" : "POR_TIPO_DE_SUCESO");
+		respuesta.put("casos", casos);
 		return respuesta;
 	}
 
+	private Map<String, Object> casoAnterior(Incidente anterior) {
+		List<TipoUnidad> fueron = atenciones.buscarTiposDeUnidadVigentes(anterior.getId());
+		Map<String, Object> caso = new LinkedHashMap<>();
+		caso.put("incidenteId", anterior.getId());
+		caso.put("tipoDeSuceso", anterior.getTipoSuceso());
+		caso.put("comoTermino", anterior.getEstado().name());
+		caso.put("motivoDeCierre", anterior.getMotivoCierre() == null ? null : anterior.getMotivoCierre().name());
+		caso.put("afectadosDeclarados", anterior.getCantidadAfectados());
+		caso.put("unidadesQueFueron", fueron.stream().map(Enum::name).toList());
+		caso.put("necesitaba", necesita(anterior));
+		caso.put("condicionesCumplidas", evaluaciones.buscarUltimaHecha(anterior.getId())
+				.map(ultima -> cumplidas(json.readTree(ultima.getVeredictos())))
+				.orElse(List.of()));
+		return caso;
+	}
+
 	/**
-	 * Lo que el protocolo vigente dice sobre un tema: las condiciones cuyo texto, pregunta o cita nombran alguna de
-	 * las palabras buscadas, con la respuesta que les asigna y de qué parte de la norma salen.
+	 * Lo que el protocolo vigente y las normas dicen sobre un tema. Del protocolo, las condiciones cuyo texto, pregunta
+	 * o cita nombran alguna de las palabras buscadas, con la respuesta que les asigna. De las normas, los extractos
+	 * que el índice encontró más cerca de la consulta, con su cita.
+	 *
+	 * @param deLaNorma lo que encontró el índice de la norma; vacío si está apagado o no se indexó
 	 */
 	@Transactional(readOnly = true)
-	public Map<String, Object> buscarEnNorma(String consulta) {
+	public Map<String, Object> buscarEnNorma(String consulta, List<IndiceDeLaNorma.Hallazgo> deLaNorma) {
 		Set<String> palabras = palabras(consulta);
 		if (palabras.isEmpty()) {
 			throw new ErrorDeHerramienta("La consulta está vacía: escribe qué buscar, por ejemplo «persona atrapada».");
@@ -234,28 +258,50 @@ public class ConsultasDelAgente {
 		if (vigente == null) {
 			respuesta.put("fragmentos", List.of());
 			respuesta.put("nota", "La central no tiene un protocolo publicado.");
-			return respuesta;
-		}
-		record Hallazgo(int coincidencias, Map<String, Object> fragmento) {
-		}
-		List<Hallazgo> hallazgos = new ArrayList<>();
-		for (TipoDeSuceso tipo : vigente.getTipos()) {
-			for (Condicion condicion : tipo.getCondiciones()) {
-				Set<String> texto = palabras(String.join(" ", tipo.getNombre(), condicion.getCodigo().replace('_', ' '),
-						condicion.getEnunciado(), condicion.getPregunta() == null ? "" : condicion.getPregunta(),
-						condicion.getCita() == null ? "" : condicion.getCita()));
-				int coincidencias = (int) palabras.stream().filter(texto::contains).count();
-				if (coincidencias > 0) {
-					Map<String, Object> fragmento = new LinkedHashMap<>(condicion(condicion));
-					fragmento.put("tipoDeSuceso", tipo.getCodigo());
-					hallazgos.add(new Hallazgo(coincidencias, fragmento));
+		} else {
+			record Hallazgo(int coincidencias, Map<String, Object> fragmento) {
+			}
+			List<Hallazgo> hallazgos = new ArrayList<>();
+			for (TipoDeSuceso tipo : vigente.getTipos()) {
+				for (Condicion condicion : tipo.getCondiciones()) {
+					Set<String> texto = palabras(String.join(" ", tipo.getNombre(),
+							condicion.getCodigo().replace('_', ' '), condicion.getEnunciado(),
+							condicion.getPregunta() == null ? "" : condicion.getPregunta(),
+							condicion.getCita() == null ? "" : condicion.getCita()));
+					int coincidencias = (int) palabras.stream().filter(texto::contains).count();
+					if (coincidencias > 0) {
+						Map<String, Object> fragmento = new LinkedHashMap<>(condicion(condicion));
+						fragmento.put("tipoDeSuceso", tipo.getCodigo());
+						hallazgos.add(new Hallazgo(coincidencias, fragmento));
+					}
 				}
 			}
+			hallazgos.sort((uno, otro) -> Integer.compare(otro.coincidencias(), uno.coincidencias()));
+			respuesta.put("versionDelProtocolo", vigente.getVersion());
+			respuesta.put("fragmentos",
+					hallazgos.stream().limit(MAXIMO_DE_FRAGMENTOS).map(Hallazgo::fragmento).toList());
 		}
-		hallazgos.sort((uno, otro) -> Integer.compare(otro.coincidencias(), uno.coincidencias()));
-		respuesta.put("versionDelProtocolo", vigente.getVersion());
-		respuesta.put("fragmentos", hallazgos.stream().limit(MAXIMO_DE_FRAGMENTOS).map(Hallazgo::fragmento).toList());
+		if (!deLaNorma.isEmpty()) {
+			respuesta.put("extractosDeLaNorma", deLaNorma.stream().map(ConsultasDelAgente::extracto).toList());
+			respuesta.put("sobreLosExtractos", "Son extractos de las normas nacionales, del más cercano a la consulta al "
+					+ "menos. Para citarlos usa su documento, sección y página. Ante la duda vale el documento oficial.");
+		}
 		return respuesta;
+	}
+
+	private static Map<String, Object> extracto(IndiceDeLaNorma.Hallazgo hallazgo) {
+		Map<String, Object> extracto = new LinkedHashMap<>();
+		extracto.put("documento", hallazgo.titulo());
+		extracto.put("referencia", hallazgo.referencia());
+		extracto.put("seccion", hallazgo.seccion());
+		extracto.put("pagina", hallazgo.pagina());
+		extracto.put("texto", hallazgo.texto());
+		extracto.put("similitud", redondear(hallazgo.similitud()));
+		return extracto;
+	}
+
+	private static double redondear(double similitud) {
+		return Math.round(similitud * 100) / 100.0;
 	}
 
 	private Incidente incidente(long incidenteId) {

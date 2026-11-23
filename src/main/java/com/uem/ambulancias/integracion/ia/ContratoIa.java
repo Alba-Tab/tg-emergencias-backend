@@ -93,6 +93,20 @@ final class ContratoIa {
 	record Provenance(String provider, String model, String promptVersion, String generatedAt, String method) {
 	}
 
+	record EmbeddingRequest(String jobId, List<String> texts) {
+
+		@Override
+		public String toString() {
+			// Los textos llevan lo que se sabe de los casos: no tienen por qué terminar en un registro.
+			return "EmbeddingRequest[jobId=" + jobId + ", texts=" + (texts == null ? 0 : texts.size()) + "]";
+		}
+
+	}
+
+	@JsonIgnoreProperties(ignoreUnknown = true)
+	record EmbeddingResponse(List<List<Double>> vectors, Provenance provenance) {
+	}
+
 	@JsonIgnoreProperties(ignoreUnknown = true)
 	record ErrorResponse(String errorCode, Boolean retryable) {
 	}
