@@ -1,9 +1,12 @@
 package com.uem.ambulancias.emergencias.service;
 
 import java.time.Instant;
+import java.util.Comparator;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import com.uem.ambulancias.comun.error.CodigoError;
 import com.uem.ambulancias.comun.error.ConflictoException;
@@ -21,7 +24,9 @@ import com.uem.ambulancias.emergencias.repository.IncidenteRepository;
 import com.uem.ambulancias.protocolo.domain.TipoDeSuceso;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
@@ -40,6 +45,7 @@ public class FormularioDelCaso {
 	private final AtencionRepository atenciones;
 	private final EventoDelCasoRepository eventos;
 	private final BitacoraDelCaso bitacora;
+	private final ApplicationEventPublisher novedades;
 	private final JsonMapper json;
 
 	/**
@@ -95,6 +101,66 @@ public class FormularioDelCaso {
 	public Map<String, RespuestaDelTestigo> respuestasDe(Long alertaId, Long ciudadanoId) {
 		alertaDe(alertaId, ciudadanoId);
 		return vigentes(alertaId);
+	}
+
+	/**
+	 * El sistema necesita que el testigo conteste esas condiciones: quedaron en duda y tienen pregunta. Cada condición
+	 * se pide una sola vez por incidente; si alguna es nueva queda anotada y se avisa a quienes alertaron. El
+	 * incidente llega bloqueado por quien llama. Devuelve las que se pidieron ahora.
+	 */
+	@Transactional(propagation = Propagation.MANDATORY)
+	public List<String> preguntar(Incidente incidente, List<String> condiciones, Long evaluacionId) {
+		if (condiciones.isEmpty()) {
+			return List.of();
+		}
+		Set<String> yaPedidas = pedidas(incidente.getId());
+		List<String> nuevas = condiciones.stream().filter(condicion -> !yaPedidas.contains(condicion)).toList();
+		if (nuevas.isEmpty()) {
+			return nuevas;
+		}
+		bitacora.anotar(incidente, null, TipoEventoDelCaso.PREGUNTA_AL_TESTIGO, OrigenDelEvento.SISTEMA,
+				Instant.now(), BitacoraDelCaso.datos(
+						"condiciones", nuevas,
+						"evaluacionId", evaluacionId));
+		novedades.publishEvent(new NovedadDelIncidente(incidente.getId(), NovedadDelIncidente.Tipo.PREGUNTA_PENDIENTE));
+		return nuevas;
+	}
+
+	/**
+	 * El formulario de esa alerta: las preguntas del tipo de suceso de su incidente, con lo que el ciudadano ya
+	 * contestó. Primero van las que el sistema pidió y él todavía no contestó; dentro de cada grupo, en el orden del
+	 * protocolo. Vacío si el incidente no tiene un tipo de suceso declarado.
+	 */
+	@Transactional(readOnly = true)
+	public List<PreguntaDelCaso> preguntasDe(Long alertaId, Long ciudadanoId) {
+		Alerta alerta = alertaDe(alertaId, ciudadanoId);
+		Incidente incidente = alerta.getIncidente();
+		if (incidente == null || incidente.getTipoSuceso() == null) {
+			return List.of();
+		}
+		TipoDeSuceso tipo = incidente.getProtocolo().buscarTipo(incidente.getTipoSuceso())
+				.orElseThrow(() -> new IllegalStateException("El incidente " + incidente.getId()
+						+ " señala un tipo de suceso que su protocolo no tiene."));
+		Map<String, RespuestaDelTestigo> contestadas = vigentes(alertaId);
+		Set<String> pedidas = pedidas(incidente.getId());
+		return tipo.conPregunta().stream()
+				.map(condicion -> new PreguntaDelCaso(condicion.getCodigo(), condicion.getPregunta(),
+						contestadas.get(condicion.getCodigo()),
+						pedidas.contains(condicion.getCodigo()) && !contestadas.containsKey(condicion.getCodigo())))
+				.sorted(Comparator.comparing(pregunta -> !pregunta.prioritaria()))
+				.toList();
+	}
+
+	/** Las condiciones que el sistema ya le pidió contestar a los testigos de ese incidente. */
+	private Set<String> pedidas(Long incidenteId) {
+		Set<String> pedidas = new HashSet<>();
+		for (EventoDelCaso evento : eventos.findByIncidenteIdAndTipoOrderByIdAsc(incidenteId,
+				TipoEventoDelCaso.PREGUNTA_AL_TESTIGO.name())) {
+			for (JsonNode condicion : json.readTree(evento.getDatos()).path("condiciones")) {
+				pedidas.add(condicion.asString());
+			}
+		}
+		return pedidas;
 	}
 
 	private Alerta alertaDe(Long alertaId, Long ciudadanoId) {

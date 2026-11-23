@@ -46,7 +46,10 @@ public enum TipoEventoDelCaso {
 	CONDICIONES_EVALUADAS,
 
 	/** Subió lo que el incidente necesita: más unidades o una de más capacidad, por las condiciones que se cumplen. */
-	PLAN_DE_RESPUESTA_ACTUALIZADO;
+	PLAN_DE_RESPUESTA_ACTUALIZADO,
+
+	/** El sistema le pidió al testigo que conteste una pregunta del formulario, porque la condición quedó en duda. */
+	PREGUNTA_AL_TESTIGO;
 
 	/**
 	 * Si el renglón trae algo nuevo sobre lo que pasa en el lugar. Son los que piden volver a evaluar las condiciones

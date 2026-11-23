@@ -138,6 +138,8 @@ public class AvisoAlCiudadano {
 			case BUSCANDO_OTRA_UNIDAD -> new Texto("Buscamos otra ambulancia",
 					"La unidad que iba no puede llegar. Ya estamos buscando otra.");
 			case CERRADO_POR_LA_CENTRAL -> new Texto("Tu pedido se cerró", cierre(novedad.incidenteId()));
+			case PREGUNTA_PENDIENTE -> new Texto("Necesitamos un dato más",
+					"Responde una pregunta sobre lo que pasa para mandar la ayuda que hace falta.");
 		};
 	}
 

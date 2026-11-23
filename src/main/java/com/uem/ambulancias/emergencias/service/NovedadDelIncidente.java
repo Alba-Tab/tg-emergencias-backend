@@ -15,7 +15,10 @@ public record NovedadDelIncidente(Long incidenteId, Tipo tipo) {
 		/** La unidad que iba no puede llegar y se busca otra. */
 		BUSCANDO_OTRA_UNIDAD,
 		/** La central cerró el caso sin atenderlo. */
-		CERRADO_POR_LA_CENTRAL
+		CERRADO_POR_LA_CENTRAL,
+
+		/** Hace falta que conteste una pregunta sobre lo que pasa para saber qué mandar. */
+		PREGUNTA_PENDIENTE
 
 	}
 
