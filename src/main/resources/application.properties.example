@@ -105,6 +105,12 @@ sga.derivacion.segundos-del-testigo=45
 # Cada cuantos segundos corre el barrido que da por vencidas las derivaciones sin respuesta.
 sga.derivacion.barrido-seg=5
 
+# Worker de los razonamientos del agente. Todos tienen valor por defecto.
+sga.razonamiento.barrido-seg=2
+sga.razonamiento.maximo-intentos=2
+sga.razonamiento.espera-seg=5
+sga.razonamiento.segundos-bloqueo=180
+
 # Herramientas del agente (servidor MCP en /mcp). El servicio de IA se presenta con este token: es su
 # AI_BACKEND_MCP_TOKEN. Vacio, la ruta no existe. Nunca se versiona.
 sga.agente.token=
@@ -154,6 +160,10 @@ sga.ia.segundos-conexion=10
 sga.ia.segundos-lectura=300
 # Segundos que se espera la respuesta del modelo de decision (evaluacion de condiciones). Es una llamada corta.
 sga.ia.segundos-lectura-evaluacion=40
+# Razonamiento: en true, lo que queda en duda pasa por el agente antes de ir a una persona. Necesita sga.agente.token
+# y que el servicio de IA apunte a /mcp de este servidor. Segundos que se espera cada razonamiento.
+sga.ia.razonamiento-habilitado=false
+sga.ia.segundos-lectura-razonamiento=90
 
 # Cola de pedidos al servicio de analisis. Todos tienen valor por defecto.
 # Intentos por trabajo, y la espera entre intentos en segundos (se duplica en cada uno hasta la maxima).

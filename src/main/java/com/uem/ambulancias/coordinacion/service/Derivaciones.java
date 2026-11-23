@@ -93,6 +93,11 @@ public class Derivaciones {
 		return Optional.of(derivacion);
 	}
 
+	/** Si ese asunto del incidente ya se le pasó a una persona, haya terminado como haya terminado. */
+	public boolean yaDerivado(Long incidenteId, String clave) {
+		return derivaciones.existsByIncidenteIdAndClave(incidenteId, clave);
+	}
+
 	/** La persona de la central contesta. Si su respuesta tiene un efecto, se aplica en el momento. */
 	@Transactional
 	public Derivacion decidir(Long derivacionId, Long administradorId, OpcionDeDerivacion opcion, String nota) {

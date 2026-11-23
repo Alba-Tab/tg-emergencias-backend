@@ -10,9 +10,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import com.uem.ambulancias.coordinacion.domain.ConclusionDelAgente;
+import com.uem.ambulancias.coordinacion.service.ConclusionesRecibidas;
 import com.uem.ambulancias.coordinacion.service.ModeloDeDecision;
 import com.uem.ambulancias.coordinacion.service.PedidoDeEvaluacion;
+import com.uem.ambulancias.coordinacion.service.PedidoDeRazonamiento;
 import com.uem.ambulancias.coordinacion.service.ProbabilidadesRecibidas;
+import com.uem.ambulancias.coordinacion.service.Razonador;
 import com.uem.ambulancias.evidencias.service.AnalisisRecibido;
 import com.uem.ambulancias.evidencias.service.FalloDelServicioIa;
 import com.uem.ambulancias.evidencias.service.FalloDelServicioIa.Desenlace;
@@ -27,6 +31,7 @@ import com.uem.ambulancias.integracion.ia.ContratoIa.ErrorResponse;
 import com.uem.ambulancias.integracion.ia.ContratoIa.EvaluationRequest;
 import com.uem.ambulancias.integracion.ia.ContratoIa.EvaluationResponse;
 import com.uem.ambulancias.integracion.ia.ContratoIa.Provenance;
+import com.uem.ambulancias.integracion.ia.ContratoIa.ReasoningResponse;
 import com.uem.ambulancias.integracion.ia.ContratoIa.SummaryRequest;
 import com.uem.ambulancias.integracion.ia.ContratoIa.SummaryResponse;
 
@@ -48,16 +53,17 @@ import org.springframework.web.client.RestClientException;
  * una decisión de despacho no puede quedarse esperando lo que se espera un video.
  */
 @Slf4j
-public class ClienteIaHttp implements ServicioDeAnalisis, ModeloDeDecision {
+public class ClienteIaHttp implements ServicioDeAnalisis, ModeloDeDecision, Razonador {
 
 	/** El archivo o el pedido no sirven: reintentar daría lo mismo. */
 	private static final Set<String> DEFINITIVOS = Set.of("invalid_request", "unsupported_media_type",
 			"evidence_empty", "evidence_too_large", "mime_mismatch", "checksum_mismatch", "duration_exceeded",
 			"unreadable_media", "object_not_found", "download_failed", "invalid_download_url", "unknown_alert",
-			"duplicate_source", "nothing_to_summarize", "too_many_sources", "state_too_large");
+			"duplicate_source", "nothing_to_summarize", "too_many_sources", "state_too_large",
+			"reasoning_limit_exceeded");
 
 	private static final Set<String> PASAJEROS = Set.of("download_unavailable", "provider_unavailable",
-			"invalid_model_output", "internal_error");
+			"invalid_model_output", "internal_error", "tools_unavailable");
 
 	private static final Set<String> DE_CONFIGURACION = Set.of("unauthorized", "provider_rejected",
 			"provider_misconfigured", "service_not_configured");
@@ -69,6 +75,11 @@ public class ClienteIaHttp implements ServicioDeAnalisis, ModeloDeDecision {
 	/** El mismo servicio, con el tiempo de espera corto de las decisiones. */
 	private final RestClient restDeDecisiones;
 
+	/** El mismo servicio, con el tiempo de espera de un razonamiento. */
+	private final RestClient restDeRazonamientos;
+
+	private final boolean razonamientoHabilitado;
+
 	public ClienteIaHttp(IaProperties config) {
 		// Sin redirecciones: el servicio no las usa, y seguir una mandaría el token a otro lado. HTTP/1.1 porque
 		// uvicorn no habla HTTP/2: el cliente de Java pediría pasar a h2c y el servicio deja un aviso por cada pedido.
@@ -79,6 +90,8 @@ public class ClienteIaHttp implements ServicioDeAnalisis, ModeloDeDecision {
 				.build();
 		this.rest = cliente(http, config, config.lectura());
 		this.restDeDecisiones = cliente(http, config, config.lecturaDeEvaluacion());
+		this.restDeRazonamientos = cliente(http, config, config.lecturaDeRazonamiento());
+		this.razonamientoHabilitado = config.razonamientoHabilitado();
 	}
 
 	private static RestClient cliente(HttpClient http, IaProperties config, Duration lectura) {
@@ -135,6 +148,40 @@ public class ClienteIaHttp implements ServicioDeAnalisis, ModeloDeDecision {
 				respuesta.provenance() == null ? null : respuesta.provenance().model(),
 				respuesta.usage() == null ? null : respuesta.usage().inputTokens(),
 				respuesta.usage() == null ? null : respuesta.usage().cost());
+	}
+
+	@Override
+	public boolean disponible() {
+		return razonamientoHabilitado;
+	}
+
+	@Override
+	public ConclusionesRecibidas razonar(PedidoDeRazonamiento pedido) {
+		EvaluationRequest cuerpo = new EvaluationRequest(pedido.trabajo().toString(), pedido.incidenteId(),
+				pedido.estadoJson(), pedido.preguntas().stream()
+						.map(pregunta -> new ContratoIa.Question(pregunta.codigo(), pregunta.enunciado()))
+						.toList());
+		ReasoningResponse respuesta = llamar(restDeRazonamientos, "/v1/reasonings", cuerpo, ReasoningResponse.class);
+		return conclusiones(respuesta);
+	}
+
+	/** Las conclusiones tal como las mandó el servicio. Una sin condición no sirve y se descarta. */
+	static ConclusionesRecibidas conclusiones(ReasoningResponse respuesta) {
+		if (respuesta.conclusions() == null) {
+			throw new FalloDelServicioIa("respuesta_incompleta", Desenlace.REINTENTAR);
+		}
+		List<ConclusionesRecibidas.Conclusion> conclusiones = respuesta.conclusions().stream()
+				.filter(conclusion -> conclusion != null && conclusion.code() != null)
+				.map(conclusion -> new ConclusionesRecibidas.Conclusion(conclusion.code(),
+						ConclusionDelAgente.de(conclusion.verdict()),
+						conclusion.rationale() == null ? "" : conclusion.rationale(), lista(conclusion.sources())))
+				.toList();
+		Provenance procedencia = respuesta.provenance();
+		ContratoIa.ReasoningUsage uso = respuesta.usage();
+		return new ConclusionesRecibidas(conclusiones, lista(respuesta.toolCalls()),
+				procedencia == null ? null : procedencia.provider(), procedencia == null ? null : procedencia.model(),
+				procedencia == null ? null : procedencia.promptVersion(), uso == null ? null : uso.inputTokens(),
+				uso == null ? null : uso.outputTokens(), uso == null ? null : uso.requests());
 	}
 
 	/**
@@ -257,8 +304,8 @@ public class ClienteIaHttp implements ServicioDeAnalisis, ModeloDeDecision {
 		return instante == null ? null : instante.toString();
 	}
 
-	private static List<Long> lista(List<Long> ids) {
-		return ids == null ? List.of() : ids;
+	private static <T> List<T> lista(List<T> elementos) {
+		return elementos == null ? List.of() : elementos;
 	}
 
 }
