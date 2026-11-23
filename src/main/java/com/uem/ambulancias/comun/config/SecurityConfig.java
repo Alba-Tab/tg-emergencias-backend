@@ -101,7 +101,11 @@ public class SecurityConfig {
 								"/incidentes/*/bitacora", "/incidentes/*/evaluaciones", "/incidentes/*/derivaciones",
 								"/incidentes/*/razonamientos")
 						.hasRole(ADMIN)
-						.requestMatchers(HttpMethod.POST, "/incidentes/*/despacho", "/incidentes/*/cierre").hasRole(ADMIN)
+						.requestMatchers(HttpMethod.POST, "/incidentes/*/despacho", "/incidentes/*/cierre",
+								"/incidentes/*/caso-de-prueba", "/incidentes/*/repeticion")
+						.hasRole(ADMIN)
+						.requestMatchers("/banco-de-casos", "/banco-de-casos/**", "/mediciones", "/mediciones/**")
+						.hasRole(ADMIN)
 						.requestMatchers(HttpMethod.GET, "/traslados", "/traslados/problemas", "/traslados/*",
 								"/traslados/*/unidades")
 						.hasRole(ADMIN)
