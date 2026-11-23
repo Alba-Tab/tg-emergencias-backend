@@ -12,6 +12,8 @@ import com.uem.ambulancias.agente.domain.LlamadaDeHerramienta;
 import com.uem.ambulancias.agente.repository.LlamadaDeHerramientaRepository;
 import com.uem.ambulancias.comun.error.ConflictoException;
 import com.uem.ambulancias.comun.error.NoEncontradoException;
+import com.uem.ambulancias.memoria.service.IndiceDeLaNorma;
+import com.uem.ambulancias.memoria.service.MemoriaDeCasos;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -33,7 +35,8 @@ public class HerramientasDelAgente {
 	private final JsonMapper json;
 
 	public HerramientasDelAgente(ConsultasDelAgente consultas, AccionesDelAgente acciones,
-			LlamadaDeHerramientaRepository llamadas, JsonMapper json) {
+			LlamadaDeHerramientaRepository llamadas, JsonMapper json, IndiceDeLaNorma norma, MemoriaDeCasos memoria,
+			AgenteProperties config) {
 		this.llamadas = llamadas;
 		this.json = json;
 		this.herramientas = List.of(
@@ -61,17 +64,26 @@ public class HerramientasDelAgente {
 								Optional.ofNullable(enteroOpcional(argumentos, "horas")).map(Long::intValue).orElse(6)),
 						true),
 				new Herramienta("buscar_casos_parecidos", "Buscar casos parecidos",
-						"Incidentes ya cerrados del mismo tipo de suceso: cómo terminaron, cuántas unidades fueron y "
-								+ "qué condiciones se cumplieron. Son una referencia, no una regla.",
+						"Incidentes ya cerrados que se parecen a este: cómo terminaron, cuántas unidades fueron y qué "
+								+ "condiciones se cumplieron. Si la memoria de casos no encuentra parecidos, trae los "
+								+ "últimos del mismo tipo de suceso. Son una referencia, no una regla.",
 						esquema(Map.of(INCIDENTE, entero("El incidente para el que se buscan casos parecidos.")),
 								INCIDENTE),
-						argumentos -> consultas.buscarCasosParecidos(entero(argumentos, INCIDENTE)), true),
+						// La memoria se consulta antes y aparte: llama al servicio de IA, y eso no va dentro de la
+						// transacción en la que se arma la respuesta.
+						argumentos -> consultas.buscarCasosParecidos(entero(argumentos, INCIDENTE),
+								memoria.parecidosA(entero(argumentos, INCIDENTE), config.casosParecidos())),
+						true),
 				new Herramienta("buscar_en_norma", "Buscar en la norma",
-						"Qué dice el protocolo vigente sobre un tema: las condiciones que lo nombran, la respuesta "
-								+ "que les asigna y de qué parte de la norma salen.",
-						esquema(Map.of("consulta", texto("Las palabras a buscar, por ejemplo «persona atrapada».")),
+						"Qué dicen el protocolo vigente y las normas nacionales sobre un tema: las condiciones del "
+								+ "protocolo que lo nombran, con la respuesta que les asigna, y los extractos de las "
+								+ "normas más cercanos a la consulta, con su documento, sección y página para citarlos.",
+						esquema(Map.of("consulta", texto("Lo que se busca, por ejemplo «persona atrapada» o «qué "
+								+ "ambulancia corresponde a un paciente crítico».")),
 								"consulta"),
-						argumentos -> consultas.buscarEnNorma(texto(argumentos, "consulta")), true),
+						argumentos -> consultas.buscarEnNorma(texto(argumentos, "consulta"),
+								norma.buscar(texto(argumentos, "consulta"))),
+						true),
 				new Herramienta("mostrar_casillas", "Pedirle una respuesta al testigo",
 						"Le pide a quienes alertaron que contesten una o más condiciones del formulario. Solo sirve "
 								+ "para las condiciones que tienen pregunta. La respuesta no llega en esta "
