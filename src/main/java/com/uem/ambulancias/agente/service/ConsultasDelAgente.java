@@ -275,6 +275,7 @@ public class ConsultasDelAgente {
 		necesita.put("unidades", incidente.getUnidadesRequeridas());
 		necesita.put("tipoMinimo", incidente.getTipoMinimoRequerido() == null ? null
 				: incidente.getTipoMinimoRequerido().name());
+		necesita.put("prioridad", incidente.getPrioridad() == null ? null : incidente.getPrioridad().name());
 		return necesita;
 	}
 
@@ -293,6 +294,7 @@ public class ConsultasDelAgente {
 		Map<String, Object> respuesta = new LinkedHashMap<>();
 		respuesta.put("unidadesAdicionales", condicion.getUnidadesAdicionales());
 		respuesta.put("tipoMinimo", condicion.getTipoMinimo() == null ? null : condicion.getTipoMinimo().name());
+		respuesta.put("prioridad", condicion.getPrioridad() == null ? null : condicion.getPrioridad().name());
 		respuesta.put("laVeUnaPersona", condicion.isDerivaAPersona());
 		return respuesta;
 	}

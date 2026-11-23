@@ -200,7 +200,7 @@ public class RazonamientoDelCasoService {
 							"fuentes", conclusion.fuentes()));
 			if (cumple) {
 				recursos.requerir(incidente, 1 + condicion.getUnidadesAdicionales(), condicion.getTipoMinimo(),
-						BitacoraDelCaso.datos(
+						condicion.getPrioridad(), BitacoraDelCaso.datos(
 								"razonamientoId", razonamiento.getId(),
 								"porCondiciones", List.of(codigo)));
 			}

@@ -70,6 +70,15 @@ public interface AtencionRepository extends JpaRepository<Atencion, Long> {
 			@Param("activos") Collection<EstadoAtencion> activos,
 			@Param("resueltos") Collection<EstadoAtencion> resueltos);
 
+	/** Las atenciones activas de los demás incidentes, con su ambulancia y su incidente, en orden de toma. */
+	@Query("""
+			select a from Atencion a join fetch a.ambulancia join fetch a.incidente i
+			where i.id <> :incidenteId and a.estado in :activos
+			order by a.horaToma
+			""")
+	List<Atencion> buscarActivasDeOtrosIncidentes(@Param("incidenteId") Long incidenteId,
+			@Param("activos") Collection<EstadoAtencion> activos);
+
 	/** Atenciones activas del incidente con su ambulancia, en orden de toma. */
 	default List<Atencion> buscarActivasPorIncidente(Long idIncidente) {
 		return buscarPorIncidenteYEstados(idIncidente, EstadoAtencion.ACTIVOS);

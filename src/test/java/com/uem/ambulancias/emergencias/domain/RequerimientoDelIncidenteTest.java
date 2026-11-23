@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Test;
 
 import com.uem.ambulancias.comun.geo.Geo;
 import com.uem.ambulancias.flota.domain.TipoUnidad;
+import com.uem.ambulancias.protocolo.domain.Prioridad;
 
 /** Lo que un incidente necesita solo sube: el sistema suma recursos, y quitarlos lo decide una persona. */
 @Tag("PB-36")
@@ -54,6 +55,33 @@ class RequerimientoDelIncidenteTest {
 
 		assertThat(incidente.getUnidadesRequeridas()).isEqualTo(3);
 		assertThat(incidente.getTipoMinimoRequerido()).isEqualTo(TipoUnidad.III);
+	}
+
+	@Test
+	@Tag("PB-43")
+	@DisplayName("PB-43 · un incidente nace sin prioridad y toma la primera que se le fija")
+	void tomaLaPrioridad() {
+		Incidente incidente = incidente();
+		assertThat(incidente.getPrioridad()).isNull();
+
+		assertThat(incidente.priorizar(Prioridad.VERDE)).isTrue();
+		assertThat(incidente.getPrioridad()).isEqualTo(Prioridad.VERDE);
+		assertThat(incidente.priorizar(Prioridad.ROJA)).isTrue();
+		assertThat(incidente.getPrioridad()).isEqualTo(Prioridad.ROJA);
+	}
+
+	@Test
+	@Tag("PB-43")
+	@DisplayName("PB-43 · una prioridad igual, menos urgente o sin dato no cambia la del incidente")
+	void laPrioridadNuncaBaja() {
+		Incidente incidente = incidente();
+		incidente.priorizar(Prioridad.AMARILLA);
+
+		assertThat(incidente.priorizar(Prioridad.AMARILLA)).isFalse();
+		assertThat(incidente.priorizar(Prioridad.VERDE)).isFalse();
+		assertThat(incidente.priorizar(null)).isFalse();
+
+		assertThat(incidente.getPrioridad()).isEqualTo(Prioridad.AMARILLA);
 	}
 
 }
