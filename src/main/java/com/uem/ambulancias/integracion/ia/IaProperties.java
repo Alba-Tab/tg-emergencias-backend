@@ -41,7 +41,9 @@ public record IaProperties(
 		@DefaultValue("false") boolean razonamientoHabilitado,
 
 		/** Cuánto se espera un razonamiento: el agente da varios pasos y cada uno es un pedido a un modelo. */
-		@DefaultValue("90") int segundosLecturaRazonamiento) {
+		@DefaultValue("90") int segundosLecturaRazonamiento,
+		@DefaultValue("false") boolean embeddingsHabilitado,
+		@DefaultValue("10") int segundosLecturaEmbeddings) {
 
 	public Duration conexion() {
 		return Duration.ofSeconds(segundosConexion);
@@ -57,6 +59,10 @@ public record IaProperties(
 
 	public Duration lecturaDeRazonamiento() {
 		return Duration.ofSeconds(segundosLecturaRazonamiento);
+	}
+
+	public Duration lecturaDeEmbeddings() {
+		return Duration.ofSeconds(segundosLecturaEmbeddings);
 	}
 
 }

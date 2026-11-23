@@ -22,8 +22,11 @@ import com.uem.ambulancias.evidencias.service.FalloDelServicioIa;
 import com.uem.ambulancias.evidencias.service.FalloDelServicioIa.Desenlace;
 import com.uem.ambulancias.integracion.ia.ContratoIa.Answer;
 import com.uem.ambulancias.integracion.ia.ContratoIa.Conclusion;
+import com.uem.ambulancias.integracion.ia.ContratoIa.EmbeddingResponse;
 import com.uem.ambulancias.integracion.ia.ContratoIa.EvaluationResponse;
+import com.uem.ambulancias.integracion.ia.ContratoIa.Provenance;
 import com.uem.ambulancias.integracion.ia.ContratoIa.ReasoningResponse;
+import com.uem.ambulancias.memoria.service.ModeloDeEmbeddings;
 
 /** La tabla con la que el backend decide qué hacer con cada error del servicio de IA. */
 @Tag("PB-19")
@@ -132,6 +135,44 @@ class ClienteIaHttpTest {
 		assertThat(recibidas.pedidosAlModelo()).isEqualTo(3);
 		assertThatThrownBy(() -> ClienteIaHttp.conclusiones(new ReasoningResponse(null, null, null, null)))
 				.isInstanceOf(FalloDelServicioIa.class);
+	}
+
+	private static final Provenance DE_EMBEDDINGS = new Provenance("openrouter", "openai/text-embedding-3-small", null,
+			"2026-11-23T20:00:00Z", "embedding_model");
+
+	@Test
+	@Tag("PB-44")
+	@DisplayName("PB-44 · los vectores sirven si hay uno por texto, todos del mismo tamaño y con el modelo que los produjo")
+	void vectoresCompletos() {
+		ModeloDeEmbeddings.VectoresRecibidos recibidos = ClienteIaHttp.vectores(
+				new EmbeddingResponse(List.of(List.of(0.5, -0.25), List.of(0.0, 1.0)), DE_EMBEDDINGS), 2);
+
+		assertThat(recibidos.modelo()).isEqualTo("openai/text-embedding-3-small");
+		assertThat(recibidos.vectores()).hasSize(2);
+		assertThat(recibidos.vectores().get(0)).containsExactly(0.5f, -0.25f);
+		assertThat(recibidos.vectores().get(1)).containsExactly(0f, 1f);
+	}
+
+	@Test
+	@Tag("PB-44")
+	@DisplayName("PB-44 · si falta un vector, vienen de distinto tamaño, traen algo que no es un número o no dicen el modelo, la respuesta se reintenta")
+	void vectoresIncompletos() {
+		List<EmbeddingResponse> invalidas = List.of(
+				new EmbeddingResponse(null, DE_EMBEDDINGS),
+				new EmbeddingResponse(List.of(List.of(0.5, 0.25)), DE_EMBEDDINGS),
+				new EmbeddingResponse(List.of(List.of(0.5, 0.25), List.of(0.1)), DE_EMBEDDINGS),
+				new EmbeddingResponse(List.of(List.of(0.5, 0.25), List.of()), DE_EMBEDDINGS),
+				new EmbeddingResponse(List.of(List.of(0.5, 0.25), List.of(Double.NaN, 0.1)), DE_EMBEDDINGS),
+				new EmbeddingResponse(List.of(List.of(0.5, 0.25), Arrays.asList(0.1, null)), DE_EMBEDDINGS),
+				new EmbeddingResponse(List.of(List.of(0.5, 0.25), List.of(0.1, 0.2)), null),
+				new EmbeddingResponse(List.of(List.of(0.5, 0.25), List.of(0.1, 0.2)),
+						new Provenance("openrouter", " ", null, null, null)));
+
+		assertThat(invalidas).allSatisfy(respuesta -> assertThatThrownBy(() -> ClienteIaHttp.vectores(respuesta, 2))
+				.isInstanceOfSatisfying(FalloDelServicioIa.class, fallo -> {
+					assertThat(fallo.getCodigo()).isEqualTo("respuesta_incompleta");
+					assertThat(fallo.getDesenlace()).isEqualTo(Desenlace.REINTENTAR);
+				}));
 	}
 
 }

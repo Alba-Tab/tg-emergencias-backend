@@ -167,6 +167,21 @@ sga.ia.segundos-lectura-evaluacion=40
 # y que el servicio de IA apunte a /mcp de este servidor. Segundos que se espera cada razonamiento.
 sga.ia.razonamiento-habilitado=false
 sga.ia.segundos-lectura-razonamiento=90
+# Busqueda por parecido: en true, el agente encuentra extractos de las normas y casos anteriores por lo que dicen
+# y no por las palabras que usan. Despues de encenderla hay que pedir POST /norma/indexacion una vez. Segundos que
+# se espera cada pedido de vectores: tiene que ser corto, porque el agente lo pide mientras razona.
+sga.ia.embeddings-habilitado=false
+sga.ia.segundos-lectura-embeddings=10
+
+# Memoria de casos y norma indexada. Todos tienen valor por defecto.
+# Cada cuantos segundos se suman a la memoria los incidentes que se cerraron.
+sga.memoria.barrido-seg=30
+# Por debajo de este parecido (coseno, de 0 a 1) un resultado no se devuelve.
+sga.memoria.similitud-minima=0.25
+# Cuantos extractos de la norma se devuelven como maximo por busqueda.
+sga.memoria.fragmentos=4
+# Cuantos textos se mandan a convertir por pedido.
+sga.memoria.lote=16
 
 # Cola de pedidos al servicio de analisis. Todos tienen valor por defecto.
 # Intentos por trabajo, y la espera entre intentos en segundos (se duplica en cada uno hasta la maxima).

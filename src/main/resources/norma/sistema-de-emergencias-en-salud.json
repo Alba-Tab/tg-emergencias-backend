@@ -1,0 +1,57 @@
+{
+  "documento": "NORMA_SISTEMA_DE_EMERGENCIAS_EN_SALUD",
+  "titulo": "Norma Nacional de Caracterización del Sistema Nacional de Emergencias en Salud",
+  "referencia": "Ministerio de Salud, Serie Documentos Técnico-Normativos N.º 433, La Paz, 2017",
+  "fragmentos": [
+    {
+      "seccion": "Presentación: ámbito de aplicación",
+      "pagina": null,
+      "texto": "La presente Norma Nacional es de aplicación obligatoria en todo el ámbito del territorio nacional para los prestadores de salud públicos y privados, así como todas aquellas instituciones e instancias que estén involucrados con la atención de urgencias, emergencias, catástrofes y desastres en salud. Define el diseño esencial de infraestructura, equipamiento, recursos humanos, procesos, procedimientos y actividades con los que deben contar las diferentes instancias de coordinación de emergencias, urgencias, desastres y catástrofes en salud a nivel nacional, departamental y municipal; asimismo establece las condiciones y estrategias necesarias destinadas a brindar atención prehospitalaria e interhospitalaria, articulando la referencia de pacientes entre los establecimientos de salud de los cuatro niveles de atención, y coordina el funcionamiento de los servicios de ambulancias en todos los subsectores involucrados (medicina tradicional, de privados con y sin fines de lucro, de la salud pública y el de la seguridad social a corto plazo)."
+    },
+    {
+      "seccion": "Definiciones: llamada telefónica, triaje telefónico y triaje in situ",
+      "pagina": 21,
+      "texto": "Llamada telefónica: es la que realiza un usuario al centro coordinador de emergencias de salud, donde se reporta o solicita la asistencia prehospitalaria o interhospitalaria cuando se presenta un evento adverso que ponga en riesgo la vida del mismo u otras personas. Triaje telefónico: proceso de clasificación de la urgencia o emergencia realizado por el centro coordinador de emergencias de salud, en base a un protocolo según la gravedad del paciente y su prioridad, para establecer el tiempo de espera razonable para ser atendido o tratado por el equipo sanitario, además de activar el mejor recurso de atención para su caso o el mejor medio de transporte sanitario al establecimiento de salud, para la resolución de la urgencia o emergencia en salud. Triaje in situ: proceso de clasificación de la urgencia o emergencia, realizado por el equipo de la ambulancia o personal calificado que se encuentre en el área, en base a un protocolo según la gravedad del paciente, para la resolución del caso en forma inmediata o su traslado al hospital."
+    },
+    {
+      "seccion": "CCES-D: coordinación de los servicios de ambulancias",
+      "pagina": 36,
+      "texto": "El Centro Coordinador de Emergencias en Salud Departamental (CCES-D) garantiza la atención prehospitalaria y la referencia a los pacientes o usuarios que solicitan los servicios y su admisión oportuna en el establecimiento de salud de destino, en coordinación con los establecimientos de los cuatro niveles y con otras instancias concurrentes al evento como ser Bomberos de la Policía, Policía Boliviana, SAR-FAB y otros, para que la resolución de su problema de salud sea rápida, oportuna y efectiva con personal debidamente entrenado y calificado. Coordina los servicios de ambulancias de todos los subsectores involucrados (medicina tradicional, de privados con y sin fines de lucro, de la salud pública y de la seguridad social a corto plazo) haciéndose responsable de sus movilizaciones, en todo el territorio departamental; tiene control de la capacidad instalada (disponibilidad de camas, personal de salud, recursos y otros) y cartera de servicios que brindan los diferentes establecimientos de salud según nivel de resolución de las redes de salud."
+    },
+    {
+      "seccion": "CCES-D: Médico Coordinador de Urgencias y Emergencias",
+      "pagina": 43,
+      "texto": "El Médico Coordinador de Urgencias y Emergencias debe realizar: la optimización de uso de recursos y calidad de atención. Evaluar la gravedad del paciente, el pronóstico y la prioridad de la situación en función de los recursos y las distancias donde se encuentran; luego de orientar la conducta a adoptar, toma decisiones para la referencia y traslado inmediato. Supervisar cada secuencia de la intervención (ambulancia, médico en establecimiento de salud) que ha puesto en marcha hasta la recepción por el establecimiento de salud que corresponda. Conocer las camas disponibles de los diferentes establecimientos de salud, especialidades médicas y servicios de cuidados intensivos, tanto como la disponibilidad de otros equipos de la planta técnica necesarios para la recepción de pacientes. Organizar y coordinar la recepción de los pacientes. Redistribuir los móviles disponibles a fines de liberar el equipo médico inicial para que pueda retornar a su base, con el objetivo de no desguarnecer por largo tiempo un sector de intervención."
+    },
+    {
+      "seccion": "CCES-D: asignación de recursos e interrogatorio telefónico protocolizado",
+      "pagina": 43,
+      "texto": "El Médico Coordinador asume la responsabilidad de los procedimientos y la coordinación prehospitalaria de los cuidados de urgencia y emergencia. Asignación de recursos por el médico, coordinando la respuesta según la necesidad y no solo la solicitud expresada. El primer beneficio es la conducción del diálogo con el solicitante (o mejor aún con el propio paciente cuando es posible) y del procedimiento a seguir. Elección de la solución más apropiada: para una solicitud de la población, brindar orientación médica sin que implique necesariamente movilizar recursos, o una información sanitaria como por ejemplo la dirección de un establecimiento de salud. Si solicita una visita médica o un transporte urgente hacia un establecimiento de salud o interhospitalario, realizar un cuidadoso interrogatorio telefónico protocolizado para obtener la suficiente información que ayude a la valoración de la necesidad y que se pueda en consecuencia decidir el recurso más adecuado."
+    },
+    {
+      "seccion": "Cap. III, 3. Atención prehospitalaria",
+      "pagina": 56,
+      "texto": "La atención prehospitalaria se conceptualiza como el conjunto de actividades, procedimientos, recursos, intervenciones y tratamiento prehospitalario, a cargo de un personal capacitado, dirigidas a prestar atención en salud a pacientes o usuarios que han sufrido un incidente o alteración aguda física o mental, causada por trauma o enfermedad de cualquier etiología, cuyo objetivo es preservar la vida y disminuir las complicaciones y riesgos de invalidez y muerte, en el sitio de ocurrencia del evento y durante su traslado hasta la admisión en el establecimiento de salud de referencia. Es el proceso mediante el cual el personal de salud, a través de transporte sanitario de un servicio, traslada a un usuario desde el lugar del incidente hasta un establecimiento de salud cuya capacidad resolutiva sea acorde a la complejidad del daño, transfiriendo así la responsabilidad de la atención de las necesidades de salud del usuario hacia el establecimiento de salud de destino del traslado."
+    },
+    {
+      "seccion": "Cap. III, 5. Proceso de respuesta: llamada y despacho de la ambulancia",
+      "pagina": 57,
+      "texto": "Llamada del usuario o familiar: cuando el usuario o un familiar detecta signos de alarma, factores de riesgo o cualquier necesidad de salud que requiera atención de emergencia en un establecimiento de salud, llama al CCES-D o TSES-M para la atención y estabilización en el lugar del evento. Describe los signos al operador del CCES-D; se activa la atención como respuesta ante la existencia de una emergencia que pone en riesgo la vida del usuario, manteniéndose la comunicación ininterrumpida. Despacho de la ambulancia: el teleoperador de llamadas recibe la llamada, localiza al paciente, realiza el triaje telefónico, identifica la disponibilidad y el tipo de ambulancia para la respuesta dependiendo de la gravedad, coordina el envío de la ambulancia, monitorea la atención en tiempo real y coordina con el establecimiento la recepción del paciente, en coordinación con el médico coordinador de urgencias y emergencias."
+    },
+    {
+      "seccion": "Cap. III, 5. Proceso de respuesta: criterios para elegir el establecimiento de destino",
+      "pagina": 57,
+      "texto": "Criterios para la selección del establecimiento de destino del traslado. Capacidad resolutiva: es el primer criterio de selección del establecimiento de destino para responder de manera integral y oportuna la demanda de atención, es decir, contar con los recursos físicos y humanos calificados para el diagnóstico y tratamiento de un determinado grado de complejidad del daño en la persona. Accesibilidad: criterio de selección del establecimiento destino del traslado, que deberá ser el más cercano o accesible geográficamente. Esto significa que no necesariamente va a la red de salud, sino que puede acceder a otra red o departamento. Oportunidad: criterio en el cual, de acuerdo a protocolos, se eviten riesgos de complicación o muerte del paciente, garantizando los derechos que le asisten de recibir una atención de calidad."
+    },
+    {
+      "seccion": "Cap. III, 5. Proceso de respuesta: prioridades P1 a P4",
+      "pagina": 57,
+      "texto": "Servicio de ambulancia: de acuerdo al triaje telefónico se realiza el triaje in situ y podrá tomarse dos tipos de decisiones. Primera: el grado de prioridad de la demanda. Segunda: la respuesta más adecuada. El grado de prioridad modula la rapidez de la respuesta. Tipos de prioridades: P1 (máxima), código rojo: el recurso movilizado saldrá de forma inmediata, dejando incluso de hacer otro servicio de prioridad menor. P2, código amarillo: el recurso movilizado saldrá rápidamente, y si está en otra asistencia la finalizará. P3, código verde: el recurso asignado puede ordenar la asistencia en función de proximidad geográfica u otros criterios. P4, código negro: no se movilizan recursos."
+    },
+    {
+      "seccion": "Cap. III, 5. Proceso de respuesta: coordinación del traslado",
+      "pagina": 58,
+      "texto": "Se establecerán coordinaciones con el TSES-M y diferentes servicios de ambulancia para garantizar la disponibilidad y efectivización de la referencia del CCES-D. El traslado se efectuará previa coordinación vía radio, teléfono, handy u otros entre el CCES-D y el establecimiento de salud de destino, indicando el motivo del traslado, estado clínico y necesidades probables de atención del paciente o herido. En el proceso de atención prehospitalaria el teleoperador de llamadas recibe las llamadas de emergencia de los usuarios, realiza el triaje telefónico y determina la prioridad del servicio, coordina con el responsable de la ambulancia requerida, realiza el despacho de la ambulancia, monitorea la atención in situ y el servicio prehospitalario durante el traslado, y coordina con los establecimientos de salud para la recepción del usuario."
+    }
+  ]
+}

@@ -5,10 +5,12 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeParseException;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 
 import com.uem.ambulancias.coordinacion.domain.ConclusionDelAgente;
 import com.uem.ambulancias.coordinacion.service.ConclusionesRecibidas;
@@ -18,8 +20,8 @@ import com.uem.ambulancias.coordinacion.service.PedidoDeRazonamiento;
 import com.uem.ambulancias.coordinacion.service.ProbabilidadesRecibidas;
 import com.uem.ambulancias.coordinacion.service.Razonador;
 import com.uem.ambulancias.evidencias.service.AnalisisRecibido;
-import com.uem.ambulancias.evidencias.service.FalloDelServicioIa;
 import com.uem.ambulancias.evidencias.service.FalloDelServicioIa.Desenlace;
+import com.uem.ambulancias.evidencias.service.FalloDelServicioIa;
 import com.uem.ambulancias.evidencias.service.PedidoDeAnalisis;
 import com.uem.ambulancias.evidencias.service.PedidoDeResumen;
 import com.uem.ambulancias.evidencias.service.Procedencia;
@@ -27,6 +29,8 @@ import com.uem.ambulancias.evidencias.service.ResumenRecibido;
 import com.uem.ambulancias.evidencias.service.ServicioDeAnalisis;
 import com.uem.ambulancias.integracion.ia.ContratoIa.AnalysisRequest;
 import com.uem.ambulancias.integracion.ia.ContratoIa.AnalysisResponse;
+import com.uem.ambulancias.integracion.ia.ContratoIa.EmbeddingRequest;
+import com.uem.ambulancias.integracion.ia.ContratoIa.EmbeddingResponse;
 import com.uem.ambulancias.integracion.ia.ContratoIa.ErrorResponse;
 import com.uem.ambulancias.integracion.ia.ContratoIa.EvaluationRequest;
 import com.uem.ambulancias.integracion.ia.ContratoIa.EvaluationResponse;
@@ -34,6 +38,7 @@ import com.uem.ambulancias.integracion.ia.ContratoIa.Provenance;
 import com.uem.ambulancias.integracion.ia.ContratoIa.ReasoningResponse;
 import com.uem.ambulancias.integracion.ia.ContratoIa.SummaryRequest;
 import com.uem.ambulancias.integracion.ia.ContratoIa.SummaryResponse;
+import com.uem.ambulancias.memoria.service.ModeloDeEmbeddings;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpHeaders;
@@ -53,7 +58,7 @@ import org.springframework.web.client.RestClientException;
  * una decisión de despacho no puede quedarse esperando lo que se espera un video.
  */
 @Slf4j
-public class ClienteIaHttp implements ServicioDeAnalisis, ModeloDeDecision, Razonador {
+public class ClienteIaHttp implements ServicioDeAnalisis, ModeloDeDecision, Razonador, ModeloDeEmbeddings {
 
 	/** El archivo o el pedido no sirven: reintentar daría lo mismo. */
 	private static final Set<String> DEFINITIVOS = Set.of("invalid_request", "unsupported_media_type",
@@ -80,6 +85,11 @@ public class ClienteIaHttp implements ServicioDeAnalisis, ModeloDeDecision, Razo
 
 	private final boolean razonamientoHabilitado;
 
+	/** El mismo servicio, con el tiempo de espera corto de los embeddings: los pide el agente mientras razona. */
+	private final RestClient restDeEmbeddings;
+
+	private final boolean embeddingsHabilitado;
+
 	public ClienteIaHttp(IaProperties config) {
 		// Sin redirecciones: el servicio no las usa, y seguir una mandaría el token a otro lado. HTTP/1.1 porque
 		// uvicorn no habla HTTP/2: el cliente de Java pediría pasar a h2c y el servicio deja un aviso por cada pedido.
@@ -92,6 +102,8 @@ public class ClienteIaHttp implements ServicioDeAnalisis, ModeloDeDecision, Razo
 		this.restDeDecisiones = cliente(http, config, config.lecturaDeEvaluacion());
 		this.restDeRazonamientos = cliente(http, config, config.lecturaDeRazonamiento());
 		this.razonamientoHabilitado = config.razonamientoHabilitado();
+		this.restDeEmbeddings = cliente(http, config, config.lecturaDeEmbeddings());
+		this.embeddingsHabilitado = config.embeddingsHabilitado();
 	}
 
 	private static RestClient cliente(HttpClient http, IaProperties config, Duration lectura) {
@@ -206,6 +218,43 @@ public class ClienteIaHttp implements ServicioDeAnalisis, ModeloDeDecision, Razo
 			probabilidades.put(pregunta.codigo(), probabilidad);
 		}
 		return probabilidades;
+	}
+
+	@Override
+	public boolean listoParaEmbeber() {
+		return embeddingsHabilitado;
+	}
+
+	@Override
+	public VectoresRecibidos embeber(List<String> textos) {
+		EmbeddingResponse respuesta = llamar(restDeEmbeddings, "/v1/embeddings",
+				new EmbeddingRequest(UUID.randomUUID().toString(), textos), EmbeddingResponse.class);
+		return vectores(respuesta, textos.size());
+	}
+
+	/** Un vector por texto, todos del mismo tamaño y con el modelo que los produjo. Si no, no sirven. */
+	static VectoresRecibidos vectores(EmbeddingResponse respuesta, int esperados) {
+		if (respuesta.vectors() == null || respuesta.vectors().size() != esperados || respuesta.provenance() == null
+				|| respuesta.provenance().model() == null || respuesta.provenance().model().isBlank()) {
+			throw new FalloDelServicioIa("respuesta_incompleta", Desenlace.REINTENTAR);
+		}
+		List<float[]> vectores = new ArrayList<>();
+		for (List<Double> recibido : respuesta.vectors()) {
+			if (recibido == null || recibido.isEmpty()
+					|| (!vectores.isEmpty() && recibido.size() != vectores.getFirst().length)) {
+				throw new FalloDelServicioIa("respuesta_incompleta", Desenlace.REINTENTAR);
+			}
+			float[] vector = new float[recibido.size()];
+			for (int i = 0; i < vector.length; i++) {
+				Double valor = recibido.get(i);
+				if (valor == null || valor.isNaN() || valor.isInfinite()) {
+					throw new FalloDelServicioIa("respuesta_incompleta", Desenlace.REINTENTAR);
+				}
+				vector[i] = valor.floatValue();
+			}
+			vectores.add(vector);
+		}
+		return new VectoresRecibidos(vectores, respuesta.provenance().model());
 	}
 
 	private <T> T llamar(String ruta, Object cuerpo, Class<T> tipo) {
