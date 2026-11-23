@@ -32,6 +32,7 @@ public class PublicacionesAnotadas extends PublicadorEnRegistro {
 	private final List<UnidadPublicada> unidades = new CopyOnWriteArrayList<>();
 	private final List<PosicionActualizada> posiciones = new CopyOnWriteArrayList<>();
 	private final List<Long> posicionesRetiradas = new CopyOnWriteArrayList<>();
+	private final List<Long> derivacionesPendientes = new CopyOnWriteArrayList<>();
 
 	@Override
 	public void publicarIncidenteAbierto(IncidentePublicado incidente) {
@@ -201,6 +202,16 @@ public class PublicacionesAnotadas extends PublicadorEnRegistro {
 		return avisosDeIncidenteNuevo.size();
 	}
 
+	@Override
+	public void publicarPendientes(long cantidad) {
+		derivacionesPendientes.add(cantidad);
+	}
+
+	/** Cuántas derivaciones por atender se le avisaron al panel cada vez, en orden. */
+	public List<Long> derivacionesPendientes() {
+		return List.copyOf(derivacionesPendientes);
+	}
+
 	/** Cada prueba empieza sin nada anotado. */
 	public void olvidar() {
 		incidentesAbiertos.clear();
@@ -216,6 +227,7 @@ public class PublicacionesAnotadas extends PublicadorEnRegistro {
 		unidades.clear();
 		posiciones.clear();
 		posicionesRetiradas.clear();
+		derivacionesPendientes.clear();
 	}
 
 	private record PosicionEnSeguimiento(Long incidenteId, PosicionActualizada posicion) {
