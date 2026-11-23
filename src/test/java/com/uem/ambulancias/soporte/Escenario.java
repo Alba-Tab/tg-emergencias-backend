@@ -1,6 +1,7 @@
 package com.uem.ambulancias.soporte;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.util.Base64;
@@ -34,6 +35,28 @@ public class Escenario {
 
 	/** Un grado de latitud son unos 110,6 km: este desplazamiento al norte son unos 100 m. */
 	public static final double CIEN_METROS = 0.000904;
+
+	/**
+	 * Un protocolo inventado para las pruebas, con dos tipos de suceso. No es contenido real: el de verdad lo carga
+	 * la central desde el panel. En el primer tipo, una condición se pregunta y la otra solo se deduce.
+	 */
+	public static final String PROTOCOLO_DE_EJEMPLO = """
+			{"nota": "Protocolo de prueba", "tipos": [
+			  {"codigo": "ACCIDENTE_DE_TRANSITO", "nombre": "Accidente de tránsito", "condiciones": [
+			    {"codigo": "PERSONA_ATRAPADA", "enunciado": "Hay una persona atrapada",
+			     "pregunta": "¿Hay alguien atrapado?", "umbralActuar": 0.8, "umbralPreguntar": 0.4,
+			     "unidadesAdicionales": 1, "tipoMinimo": "II", "derivaAPersona": false,
+			     "cita": "Reglamento de prueba, artículo 1"},
+			    {"codigo": "FUENTES_CONTRADICTORIAS", "enunciado": "Las fuentes se contradicen",
+			     "umbralActuar": 0.7, "umbralPreguntar": 0.4, "derivaAPersona": true}
+			  ]},
+			  {"codigo": "PERSONA_INCONSCIENTE", "nombre": "Persona inconsciente", "condiciones": [
+			    {"codigo": "NO_RESPIRA", "enunciado": "La persona no respira",
+			     "pregunta": "¿La persona dejó de respirar?", "umbralActuar": 0.6, "umbralPreguntar": 0.3,
+			     "tipoMinimo": "III"}
+			  ]}
+			]}
+			""";
 
 	private static final AtomicInteger SECUENCIA = new AtomicInteger(1);
 
@@ -204,6 +227,18 @@ public class Escenario {
 
 	public void liberar(Paramedico paramedico, long atencionId) {
 		enviar(post("/atenciones/" + atencionId + "/liberacion"), paramedico.token(), null, 200);
+	}
+
+	/** La central abre un borrador, le carga ese contenido y lo publica: queda como el protocolo vigente. */
+	public void publicarProtocolo(String contenido) {
+		enviar(post("/protocolos/borrador"), admin(), null, 201);
+		enviar(put("/protocolos/borrador"), admin(), contenido, 200);
+		enviar(post("/protocolos/borrador/publicacion"), admin(), null, 200);
+	}
+
+	/** Deja vigente el {@link #PROTOCOLO_DE_EJEMPLO}. */
+	public void protocoloVigente() {
+		publicarProtocolo(PROTOCOLO_DE_EJEMPLO);
 	}
 
 	/**
