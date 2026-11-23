@@ -2,6 +2,7 @@ package com.uem.ambulancias.coordinacion.service;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -46,6 +47,7 @@ public class EvaluacionDelCasoService {
 	private final RecursosDelIncidente recursos;
 	private final FormularioDelCaso formulario;
 	private final Derivaciones derivaciones;
+	private final RazonamientoDelCasoService razonamientos;
 	private final DerivacionProperties tiempos;
 	private final CoordinacionProperties config;
 	private final JsonMapper json;
@@ -234,17 +236,22 @@ public class EvaluacionDelCasoService {
 	 *
 	 * <p>Mientras el testigo todavía tiene tiempo de contestar no se deriva: se programa otra evaluación para cuando
 	 * se le acabe, que es la que va a notar que no contestó.
+	 *
+	 * <p>Con el agente encendido, las condiciones sin resolver pasan antes por él (PB-40): se le pide un razonamiento,
+	 * y a la persona le llega solo lo que el agente tampoco pudo resolver.
 	 */
 	private void derivarLoQueNoSeResuelve(EvaluacionDelCaso evaluacion, Incidente incidente, TipoDeSuceso tipo,
 			List<Veredicto> veredictos, JuicioDelProtocolo.Hechos hechos, Instant ahora) {
 		Map<String, Instant> pedidas = formulario.pedidasDesde(incidente.getId());
+		Map<String, Map<String, Object>> sinResolver = new LinkedHashMap<>();
 		Instant proximaRevision = null;
 		for (Veredicto veredicto : veredictos) {
 			Condicion condicion = tipo.buscarCondicion(veredicto.condicion()).orElseThrow();
 			if (veredicto.cumplida()) {
 				if (condicion.isDerivaAPersona()) {
-					derivar(evaluacion, incidente, MotivoDeDerivacion.CONDICION_QUE_DERIVA, condicion, veredicto,
-							"EL_PROTOCOLO_LO_PIDE");
+					derivaciones.derivar(incidente, MotivoDeDerivacion.CONDICION_QUE_DERIVA,
+							clave(MotivoDeDerivacion.CONDICION_QUE_DERIVA, condicion), condicion.getCodigo(),
+							paquete(condicion, veredicto, "EL_PROTOCOLO_LO_PIDE"), evaluacion);
 				}
 				continue;
 			}
@@ -266,17 +273,35 @@ public class EvaluacionDelCasoService {
 				// Sin pregunta posible y sin ninguna evidencia, una persona tampoco tendría con qué decidir.
 				continue;
 			}
-			derivar(evaluacion, incidente, MotivoDeDerivacion.CONDICION_SIN_RESOLVER, condicion, veredicto, porQue);
+			if (!derivaciones.yaDerivado(incidente.getId(), clave(MotivoDeDerivacion.CONDICION_SIN_RESOLVER, condicion))) {
+				sinResolver.put(condicion.getCodigo(), paquete(condicion, veredicto, porQue));
+			}
 		}
 		if (proximaRevision != null) {
 			cola.pedirParaDespues(incidente, "ESPERA_DE_RESPUESTA", proximaRevision);
 		}
+		if (sinResolver.isEmpty()) {
+			return;
+		}
+		if (razonamientos.disponible()) {
+			// Si ya hay un razonamiento en vuelo, alcanza con ese: cuando termine, el caso se vuelve a evaluar.
+			if (!razonamientos.hayEnVuelo(incidente.getId())) {
+				razonamientos.pedir(incidente, evaluacion, sinResolver);
+			}
+			return;
+		}
+		sinResolver.forEach((codigo, paquete) -> derivaciones.derivar(incidente,
+				MotivoDeDerivacion.CONDICION_SIN_RESOLVER, MotivoDeDerivacion.CONDICION_SIN_RESOLVER.name() + ":" + codigo,
+				codigo, paquete, evaluacion));
 	}
 
-	private void derivar(EvaluacionDelCaso evaluacion, Incidente incidente, MotivoDeDerivacion motivo,
-			Condicion condicion, Veredicto veredicto, String porQue) {
-		derivaciones.derivar(incidente, motivo, motivo.name() + ":" + condicion.getCodigo(), condicion.getCodigo(),
-				BitacoraDelCaso.datos(
+	private static String clave(MotivoDeDerivacion motivo, Condicion condicion) {
+		return motivo.name() + ":" + condicion.getCodigo();
+	}
+
+	/** Lo que la persona necesita ver para decidir sobre una condición. */
+	private static Map<String, Object> paquete(Condicion condicion, Veredicto veredicto, String porQue) {
+		return BitacoraDelCaso.datos(
 						"porQue", porQue,
 						"condicion", BitacoraDelCaso.datos(
 								"codigo", condicion.getCodigo(),
@@ -293,8 +318,7 @@ public class EvaluacionDelCasoService {
 								"respuestaDelTestigo", veredicto.respuestaDelTestigo() == null ? null
 										: veredicto.respuestaDelTestigo().name(),
 								"umbralActuar", condicion.getUmbralActuar(),
-								"umbralPreguntar", condicion.getUmbralPreguntar())),
-				evaluacion);
+								"umbralPreguntar", condicion.getUmbralPreguntar()));
 	}
 
 	/**

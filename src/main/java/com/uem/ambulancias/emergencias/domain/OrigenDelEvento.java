@@ -19,6 +19,9 @@ public enum OrigenDelEvento {
 	SISTEMA,
 
 	/** Lo decidió una persona de la central. */
-	CENTRAL
+	CENTRAL,
+
+	/** Lo concluyó el agente razonando con sus herramientas. */
+	AGENTE
 
 }

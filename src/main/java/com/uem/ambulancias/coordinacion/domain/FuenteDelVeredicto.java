@@ -19,6 +19,12 @@ public enum FuenteDelVeredicto {
 	CENTRAL,
 
 	/** Nadie contestó a tiempo y la condición se dio por cumplida: ante la duda, se atiende como el caso más grave. */
-	ANTE_LA_DUDA
+	ANTE_LA_DUDA,
+
+	/**
+	 * Lo resolvió el agente razonando con sus herramientas, y dejó su porqué. Vale mientras no llegue un dato nuevo:
+	 * con uno, la condición se vuelve a evaluar desde el principio.
+	 */
+	AGENTE
 
 }
