@@ -7,9 +7,13 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 
+import com.uem.ambulancias.coordinacion.domain.ConclusionDelAgente;
+import com.uem.ambulancias.coordinacion.service.ConclusionesRecibidas;
 import com.uem.ambulancias.coordinacion.service.ModeloDeDecision;
 import com.uem.ambulancias.coordinacion.service.PedidoDeEvaluacion;
+import com.uem.ambulancias.coordinacion.service.PedidoDeRazonamiento;
 import com.uem.ambulancias.coordinacion.service.ProbabilidadesRecibidas;
+import com.uem.ambulancias.coordinacion.service.Razonador;
 import com.uem.ambulancias.evidencias.service.AnalisisRecibido;
 import com.uem.ambulancias.evidencias.service.FalloDelServicioIa;
 import com.uem.ambulancias.evidencias.service.PedidoDeAnalisis;
@@ -24,8 +28,11 @@ import com.uem.ambulancias.evidencias.service.ServicioDeAnalisis;
  *
  * <p>También hace de modelo de decisión. Sin nada preparado responde como el decisor de prueba del servicio: 0,95 a
  * la condición que el testigo contestó que sí, 0,05 a la que contestó que no y 0,5 a las demás.
+ *
+ * <p>Y de agente razonador, que arranca apagado para que las pruebas que no lo necesitan no lo vean. Encendido y sin
+ * nada preparado, no resuelve ninguna condición: todas quedan en «no se sabe».
  */
-public class ServicioIaFalso implements ServicioDeAnalisis, ModeloDeDecision {
+public class ServicioIaFalso implements ServicioDeAnalisis, ModeloDeDecision, Razonador {
 
 	private final Map<Long, FalloDelServicioIa> fallosPorEvidencia = new ConcurrentHashMap<>();
 	private final List<PedidoDeAnalisis> analisisPedidos = new CopyOnWriteArrayList<>();
@@ -35,6 +42,10 @@ public class ServicioIaFalso implements ServicioDeAnalisis, ModeloDeDecision {
 	private volatile FalloDelServicioIa falloDelResumen;
 	private volatile FalloDelServicioIa falloDeLaEvaluacion;
 	private volatile String analisisPreparado;
+	private final List<PedidoDeRazonamiento> razonamientosPedidos = new CopyOnWriteArrayList<>();
+	private final Map<String, ConclusionesRecibidas.Conclusion> conclusiones = new ConcurrentHashMap<>();
+	private volatile boolean razonadorEncendido;
+	private volatile FalloDelServicioIa falloDelRazonamiento;
 
 	@Override
 	public AnalisisRecibido analizar(PedidoDeAnalisis pedido) {
@@ -92,6 +103,45 @@ public class ServicioIaFalso implements ServicioDeAnalisis, ModeloDeDecision {
 		return "NO".equals(respuesta) ? 0.05 : 0.5;
 	}
 
+	@Override
+	public boolean disponible() {
+		return razonadorEncendido;
+	}
+
+	@Override
+	public ConclusionesRecibidas razonar(PedidoDeRazonamiento pedido) {
+		razonamientosPedidos.add(pedido);
+		if (falloDelRazonamiento != null) {
+			throw falloDelRazonamiento;
+		}
+		List<ConclusionesRecibidas.Conclusion> respuesta = pedido.preguntas().stream()
+				.map(pregunta -> conclusiones.getOrDefault(pregunta.codigo(), new ConclusionesRecibidas.Conclusion(
+						pregunta.codigo(), ConclusionDelAgente.NO_SE_SABE, "La información no alcanza.", List.of())))
+				.toList();
+		return new ConclusionesRecibidas(respuesta, List.of("ver_caso", "buscar_casos_parecidos"), "prueba",
+				"razonador-de-prueba", "reasoning-v1", 900, 120, 3);
+	}
+
+	/** Desde ahora hay un agente al que pedirle razonamientos. */
+	public void encenderRazonador() {
+		razonadorEncendido = true;
+	}
+
+	/** Desde ahora, el agente concluye eso sobre esa condición. */
+	public void concluir(String condicion, ConclusionDelAgente veredicto, String justificacion, String... fuentes) {
+		conclusiones.put(condicion,
+				new ConclusionesRecibidas.Conclusion(condicion, veredicto, justificacion, List.of(fuentes)));
+	}
+
+	/** Los razonamientos fallan con ese error hasta que se llame a {@link #olvidar()}. */
+	public void fallarRazonamientos(String codigo, FalloDelServicioIa.Desenlace desenlace) {
+		falloDelRazonamiento = new FalloDelServicioIa(codigo, desenlace);
+	}
+
+	public List<PedidoDeRazonamiento> razonamientosPedidos() {
+		return List.copyOf(razonamientosPedidos);
+	}
+
 	/** Desde ahora, el modelo de decisión le da esa probabilidad a esa condición. */
 	public void responderProbabilidad(String condicion, double probabilidad) {
 		probabilidades.put(condicion, probabilidad);
@@ -144,6 +194,10 @@ public class ServicioIaFalso implements ServicioDeAnalisis, ModeloDeDecision {
 		falloDelResumen = null;
 		falloDeLaEvaluacion = null;
 		analisisPreparado = null;
+		razonamientosPedidos.clear();
+		conclusiones.clear();
+		razonadorEncendido = false;
+		falloDelRazonamiento = null;
 	}
 
 	private static Procedencia procedencia() {
