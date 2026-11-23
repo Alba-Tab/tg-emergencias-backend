@@ -68,6 +68,25 @@ public interface IncidenteRepository extends JpaRepository<Incidente, Long> {
 	@Query("select i from Incidente i where i.fechaHoraCreacion >= :desde and i.fechaHoraCreacion < :hasta")
 	List<Incidente> buscarCreadosEntre(@Param("desde") Instant desde, @Param("hasta") Instant hasta);
 
+	/**
+	 * Los incidentes abiertos a los que les puede faltar una unidad: los que nadie está cubriendo y los que piden más
+	 * de una unidad o una de cierto tipo. Solo los ids, del más viejo al más nuevo: quien les asigne una unidad los
+	 * relee bloqueados y ahí confirma si de verdad les falta.
+	 */
+	@Query("""
+			select i.id from Incidente i
+			where (i.estado = 'ACTIVO'
+			       and not exists (select a from Atencion a where a.incidente = i and a.estado in :activos))
+			   or (i.estado in ('ACTIVO', 'EN_ATENCION')
+			       and (i.unidadesRequeridas > 1 or i.tipoMinimoRequerido is not null))
+			order by i.fechaHoraCreacion, i.id
+			""")
+	List<Long> buscarIdsQuePuedenNecesitarUnidadCon(@Param("activos") Collection<EstadoAtencion> activos);
+
+	default List<Long> buscarIdsQuePuedenNecesitarUnidad() {
+		return buscarIdsQuePuedenNecesitarUnidadCon(EstadoAtencion.ACTIVOS);
+	}
+
 	default List<Incidente> buscarSinCubrir() {
 		return buscarActivosSinAtencionEn(EstadoAtencion.ACTIVOS);
 	}

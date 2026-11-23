@@ -8,6 +8,7 @@ import java.util.Optional;
 import com.uem.ambulancias.emergencias.domain.Atencion;
 import com.uem.ambulancias.emergencias.domain.EstadoAtencion;
 import com.uem.ambulancias.emergencias.domain.MotivoSinTraslado;
+import com.uem.ambulancias.flota.domain.TipoUnidad;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -139,6 +140,13 @@ public interface AtencionRepository extends JpaRepository<Atencion, Long> {
 	 */
 	@Query("select distinct a.ambulancia.id from Atencion a where a.traslado.id = :trasladoId")
 	List<Long> buscarAmbulanciasQueLoTuvieron(@Param("trasladoId") Long trasladoId);
+
+	/**
+	 * El tipo de cada unidad que fue al incidente y no canceló: las que van, las que trabajan y las que ya
+	 * resolvieron. Con esto se cuenta cuántas unidades tiene el caso y si alguna alcanza el tipo que se pidió.
+	 */
+	@Query("select a.ambulancia.tipoUnidad from Atencion a where a.incidente.id = :incidenteId and a.estado <> 'CANCELADA'")
+	List<TipoUnidad> buscarTiposDeUnidadVigentes(@Param("incidenteId") Long incidenteId);
 
 	/** Las unidades que ya estuvieron en ese incidente: el administrador lo ve al elegir a cuál mandar. */
 	@Query("select distinct a.ambulancia.id from Atencion a where a.incidente.id = :incidenteId")
