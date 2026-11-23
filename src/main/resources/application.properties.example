@@ -111,6 +111,9 @@ sga.razonamiento.maximo-intentos=2
 sga.razonamiento.espera-seg=5
 sga.razonamiento.segundos-bloqueo=180
 
+# Mediciones del modelo de decision con el banco de casos: cada cuantos segundos el medidor mira si hay una pendiente.
+sga.medicion.barrido-seg=5
+
 # Herramientas del agente (servidor MCP en /mcp). El servicio de IA se presenta con este token: es su
 # AI_BACKEND_MCP_TOKEN. Vacio, la ruta no existe. Nunca se versiona.
 sga.agente.token=

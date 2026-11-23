@@ -116,7 +116,7 @@ public class ArmadorDelEstado {
 	}
 
 	/** Los hechos que usan las reglas, releídos de un estado que ya se armó y se guardó. */
-	static JuicioDelProtocolo.Hechos hechosDe(JsonNode estado) {
+	public static JuicioDelProtocolo.Hechos hechosDe(JsonNode estado) {
 		Map<String, RespuestaDelTestigo> respuestas = new LinkedHashMap<>();
 		estado.path(RESPUESTAS).properties().forEach(campo -> respuestas.put(campo.getKey(),
 				RespuestaDelTestigo.valueOf(campo.getValue().asString())));
