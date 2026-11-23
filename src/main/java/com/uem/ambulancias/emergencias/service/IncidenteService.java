@@ -11,6 +11,8 @@ import com.uem.ambulancias.emergencias.domain.Atencion;
 import com.uem.ambulancias.emergencias.domain.EstadoIncidente;
 import com.uem.ambulancias.emergencias.domain.Incidente;
 import com.uem.ambulancias.emergencias.domain.MotivoCancelacionAlerta;
+import com.uem.ambulancias.emergencias.domain.OrigenDelEvento;
+import com.uem.ambulancias.emergencias.domain.TipoEventoDelCaso;
 import com.uem.ambulancias.emergencias.exception.IncidenteYaTomadoException;
 import com.uem.ambulancias.emergencias.repository.AlertaRepository;
 import com.uem.ambulancias.emergencias.repository.AtencionRepository;
@@ -38,6 +40,7 @@ public class IncidenteService {
 	private final AmbulanciaRepository ambulancias;
 	private final BloqueoDeAgrupacion bloqueoDeAgrupacion;
 	private final AgrupacionProperties agrupacion;
+	private final BitacoraDelCaso bitacora;
 	private final ApplicationEventPublisher eventos;
 
 	/**
@@ -68,6 +71,12 @@ public class IncidenteService {
 
 		alerta.vincular(incidente);
 		alertas.save(alerta);
+		bitacora.anotar(incidente, alerta, TipoEventoDelCaso.ALERTA_RECIBIDA, OrigenDelEvento.CIUDADANO,
+				alerta.getFechaHora(), BitacoraDelCaso.datos(
+						"incidenteNuevo", nuevo,
+						"origenUbicacion", alerta.getOrigenUbicacion().name(),
+						"cantidadAfectados", alerta.getCantidadAfectados(),
+						"descripcion", alerta.getDescripcion()));
 
 		// Un incidente recién creado todavía no tiene unidad en camino: hay que avisar a las disponibles.
 		eventos.publishEvent(new IncidenteActualizado(incidente.getId(), nuevo));
@@ -111,6 +120,12 @@ public class IncidenteService {
 
 		incidente.consolidarAfectados(cantidadAfectados);
 		incidentes.save(incidente);
+		if (cantidadAfectados != null || descripcion != null) {
+			bitacora.anotar(incidente, alerta, TipoEventoDelCaso.DETALLES_COMPLETADOS, OrigenDelEvento.CIUDADANO,
+					Instant.now(), BitacoraDelCaso.datos(
+							"cantidadAfectados", cantidadAfectados,
+							"descripcion", descripcion));
+		}
 
 		eventos.publishEvent(new IncidenteActualizado(incidenteId, false));
 		eventos.publishEvent(new IncidenteConDatosNuevos(incidenteId));
@@ -150,6 +165,10 @@ public class IncidenteService {
 
 		alerta.cancelar(motivo, emisorEsPaciente);
 		alertas.save(alerta);
+		bitacora.anotar(incidente, alerta, TipoEventoDelCaso.ALERTA_CANCELADA, OrigenDelEvento.CIUDADANO,
+				alerta.getHoraCancelacion(), BitacoraDelCaso.datos(
+						"motivo", motivo.name(),
+						"emisorEsPaciente", emisorEsPaciente));
 
 		boolean quedanPedidos = alertas.existeAlgunaVigente(incidenteId);
 		boolean hayUnidadEnCamino = atenciones.existeActivaPorIncidente(incidenteId);
