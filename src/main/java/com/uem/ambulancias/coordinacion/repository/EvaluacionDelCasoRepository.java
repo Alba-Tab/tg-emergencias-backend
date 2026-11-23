@@ -9,6 +9,7 @@ import com.uem.ambulancias.coordinacion.domain.EvaluacionDelCaso;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -38,6 +39,18 @@ public interface EvaluacionDelCasoRepository extends JpaRepository<EvaluacionDel
 
 	@Query("select count(e) > 0 from EvaluacionDelCaso e where e.incidente.id = :incidenteId and e.estado = 'PENDIENTE'")
 	boolean existePendiente(@Param("incidenteId") Long incidenteId);
+
+	/**
+	 * Las pendientes del incidente que estaban programadas para más tarde pasan a poder tomarse ya, y queda como motivo
+	 * lo que las adelantó.
+	 */
+	@Modifying
+	@Query("""
+			update EvaluacionDelCaso e set e.proximoIntento = :ahora, e.motivo = :motivo
+			where e.incidente.id = :incidenteId and e.estado = 'PENDIENTE' and e.proximoIntento > :ahora
+			""")
+	int adelantarPendientes(@Param("incidenteId") Long incidenteId, @Param("motivo") String motivo,
+			@Param("ahora") Instant ahora);
 
 	/** Las evaluaciones del incidente, de la más vieja a la más nueva. */
 	List<EvaluacionDelCaso> findByIncidenteIdOrderByIdAsc(Long incidenteId);

@@ -210,10 +210,12 @@ class AsignacionConConfirmacionIT extends PruebaIT {
 		assertThat(publicaciones.ultimoAvisoDeIncidenteNuevo())
 				.containsExactlyInAnyOrder("push-cerca", "push-sin-posicion");
 		bitacora(alerta.incidenteId())
-				.andExpect(jsonPath("$.length()").value(4))
+				// Después de quedarse sin unidad, el caso se le pasa además a una persona de la central (PB-38).
+				.andExpect(jsonPath("$.length()").value(5))
 				.andExpect(jsonPath("$[3].tipo").value("SIN_UNIDAD_PARA_ASIGNAR"))
 				.andExpect(jsonPath("$[3].origen").value("SISTEMA"))
-				.andExpect(jsonPath("$[3].datos.unidadesQueLoTuvieron").value(1));
+				.andExpect(jsonPath("$[3].datos.unidadesQueLoTuvieron").value(1))
+				.andExpect(jsonPath("$[4].tipo").value("DERIVADO_A_PERSONA"));
 
 		// Abierto a todas, lo toma la que pueda, como en el modo de siempre.
 		escenario.tomar(sinPosicion, alerta.incidenteId());
@@ -234,9 +236,10 @@ class AsignacionConConfirmacionIT extends PruebaIT {
 		assertThat(publicaciones.cantidadDeAvisosDeIncidenteNuevo()).isEqualTo(1);
 		assertThat(publicaciones.ultimoAvisoDeIncidenteNuevo()).containsExactly("push-sin-posicion");
 		bitacora(alerta.incidenteId())
-				.andExpect(jsonPath("$.length()").value(2))
+				.andExpect(jsonPath("$.length()").value(3))
 				.andExpect(jsonPath("$[1].tipo").value("SIN_UNIDAD_PARA_ASIGNAR"))
-				.andExpect(jsonPath("$[1].datos.unidadesQueLoTuvieron").value(0));
+				.andExpect(jsonPath("$[1].datos.unidadesQueLoTuvieron").value(0))
+				.andExpect(jsonPath("$[2].tipo").value("DERIVADO_A_PERSONA"));
 	}
 
 	@Test

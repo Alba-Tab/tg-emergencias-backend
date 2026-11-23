@@ -9,6 +9,7 @@ import java.util.Optional;
 import com.uem.ambulancias.comun.error.NoEncontradoException;
 import com.uem.ambulancias.coordinacion.domain.EvaluacionDelCaso;
 import com.uem.ambulancias.coordinacion.domain.MetodoDeEvaluacion;
+import com.uem.ambulancias.coordinacion.domain.MotivoDeDerivacion;
 import com.uem.ambulancias.coordinacion.domain.ResultadoDeCondicion;
 import com.uem.ambulancias.coordinacion.repository.EvaluacionDelCasoRepository;
 import com.uem.ambulancias.emergencias.domain.Incidente;
@@ -44,6 +45,8 @@ public class EvaluacionDelCasoService {
 	private final BitacoraDelCaso bitacora;
 	private final RecursosDelIncidente recursos;
 	private final FormularioDelCaso formulario;
+	private final Derivaciones derivaciones;
+	private final DerivacionProperties tiempos;
 	private final CoordinacionProperties config;
 	private final JsonMapper json;
 
@@ -80,7 +83,7 @@ public class EvaluacionDelCasoService {
 				.map(condicion -> new PedidoDeEvaluacion.Pregunta(condicion.getCodigo(), condicion.getEnunciado()))
 				.toList();
 		if (abiertas.isEmpty() || !hayModelo) {
-			cerrar(evaluacion, incidente, tipo, porReglas, MetodoDeEvaluacion.REGLAS, ahora);
+			cerrar(evaluacion, incidente, tipo, porReglas, armado.hechos(), MetodoDeEvaluacion.REGLAS, ahora);
 			return Optional.empty();
 		}
 		// Lo que las reglas ya resolvieron se aplica ahora, sin esperar al modelo: si el testigo dijo que hay alguien
@@ -111,9 +114,10 @@ public class EvaluacionDelCasoService {
 		TipoDeSuceso tipo = tipoDe(incidente);
 		// Las reglas se vuelven a aplicar sobre el mismo estado que se guardó al preparar: lo que llegó después lo
 		// mira la evaluación siguiente, que ya está en la cola.
-		List<Veredicto> porReglas = JuicioDelProtocolo.porReglas(tipo, hechosDe(evaluacion));
+		JuicioDelProtocolo.Hechos hechos = hechosDe(evaluacion);
+		List<Veredicto> porReglas = JuicioDelProtocolo.porReglas(tipo, hechos);
 		List<Veredicto> finales = JuicioDelProtocolo.conModelo(tipo, porReglas, recibidas.probabilidades());
-		cerrar(evaluacion, incidente, tipo, finales, MetodoDeEvaluacion.MODELO, ahora);
+		cerrar(evaluacion, incidente, tipo, finales, hechos, MetodoDeEvaluacion.MODELO, ahora);
 	}
 
 	/**
@@ -146,7 +150,8 @@ public class EvaluacionDelCasoService {
 			return;
 		}
 		TipoDeSuceso tipo = tipoDe(incidente);
-		cerrar(evaluacion, incidente, tipo, JuicioDelProtocolo.porReglas(tipo, hechosDe(evaluacion)),
+		JuicioDelProtocolo.Hechos hechos = hechosDe(evaluacion);
+		cerrar(evaluacion, incidente, tipo, JuicioDelProtocolo.porReglas(tipo, hechos), hechos,
 				MetodoDeEvaluacion.REGLAS_SIN_MODELO, ahora);
 	}
 
@@ -188,7 +193,7 @@ public class EvaluacionDelCasoService {
 	}
 
 	private void cerrar(EvaluacionDelCaso evaluacion, Incidente incidente, TipoDeSuceso tipo,
-			List<Veredicto> veredictos, MetodoDeEvaluacion metodo, Instant ahora) {
+			List<Veredicto> veredictos, JuicioDelProtocolo.Hechos hechos, MetodoDeEvaluacion metodo, Instant ahora) {
 		List<Map<String, Object>> detalle = new ArrayList<>();
 		for (Veredicto veredicto : veredictos) {
 			Condicion condicion = tipo.buscarCondicion(veredicto.condicion()).orElseThrow();
@@ -215,6 +220,81 @@ public class EvaluacionDelCasoService {
 						"veredictos", detalle));
 		aplicarPlan(evaluacion, incidente, tipo, veredictos, false);
 		formulario.preguntar(incidente, porPreguntar(tipo, veredictos), evaluacion.getId());
+		derivarLoQueNoSeResuelve(evaluacion, incidente, tipo, veredictos, hechos, ahora);
+	}
+
+	/**
+	 * Lo que el sistema no puede o no debe decidir solo se le pasa a una persona (PB-38):
+	 *
+	 * <ul>
+	 * <li>una condición cumplida que el protocolo marca para que la vea una persona;</li>
+	 * <li>una condición en duda o sin evaluar para la que ya no queda a quién preguntarle: el testigo no contestó a
+	 * tiempo, o no hay pregunta o dijo que no sabe y hay una evidencia que una persona puede mirar.</li>
+	 * </ul>
+	 *
+	 * <p>Mientras el testigo todavía tiene tiempo de contestar no se deriva: se programa otra evaluación para cuando
+	 * se le acabe, que es la que va a notar que no contestó.
+	 */
+	private void derivarLoQueNoSeResuelve(EvaluacionDelCaso evaluacion, Incidente incidente, TipoDeSuceso tipo,
+			List<Veredicto> veredictos, JuicioDelProtocolo.Hechos hechos, Instant ahora) {
+		Map<String, Instant> pedidas = formulario.pedidasDesde(incidente.getId());
+		Instant proximaRevision = null;
+		for (Veredicto veredicto : veredictos) {
+			Condicion condicion = tipo.buscarCondicion(veredicto.condicion()).orElseThrow();
+			if (veredicto.cumplida()) {
+				if (condicion.isDerivaAPersona()) {
+					derivar(evaluacion, incidente, MotivoDeDerivacion.CONDICION_QUE_DERIVA, condicion, veredicto,
+							"EL_PROTOCOLO_LO_PIDE");
+				}
+				continue;
+			}
+			if (veredicto.resultado() == ResultadoDeCondicion.NO_CUMPLIDA) {
+				continue;
+			}
+			String porQue;
+			if (condicion.getPregunta() != null && veredicto.respuestaDelTestigo() == null) {
+				Instant limite = pedidas.getOrDefault(condicion.getCodigo(), ahora).plus(tiempos.esperaDelTestigo());
+				if (ahora.isBefore(limite)) {
+					proximaRevision = proximaRevision == null || limite.isBefore(proximaRevision) ? limite
+							: proximaRevision;
+					continue;
+				}
+				porQue = "EL_TESTIGO_NO_CONTESTO";
+			} else if (hechos.hayEvidenciaUtil()) {
+				porQue = condicion.getPregunta() == null ? "SIN_PREGUNTA_PARA_EL_TESTIGO" : "EL_TESTIGO_NO_SABE";
+			} else {
+				// Sin pregunta posible y sin ninguna evidencia, una persona tampoco tendría con qué decidir.
+				continue;
+			}
+			derivar(evaluacion, incidente, MotivoDeDerivacion.CONDICION_SIN_RESOLVER, condicion, veredicto, porQue);
+		}
+		if (proximaRevision != null) {
+			cola.pedirParaDespues(incidente, "ESPERA_DE_RESPUESTA", proximaRevision);
+		}
+	}
+
+	private void derivar(EvaluacionDelCaso evaluacion, Incidente incidente, MotivoDeDerivacion motivo,
+			Condicion condicion, Veredicto veredicto, String porQue) {
+		derivaciones.derivar(incidente, motivo, motivo.name() + ":" + condicion.getCodigo(), condicion.getCodigo(),
+				BitacoraDelCaso.datos(
+						"porQue", porQue,
+						"condicion", BitacoraDelCaso.datos(
+								"codigo", condicion.getCodigo(),
+								"enunciado", condicion.getEnunciado(),
+								"pregunta", condicion.getPregunta(),
+								"cita", condicion.getCita(),
+								"unidadesAdicionales", condicion.getUnidadesAdicionales(),
+								"tipoMinimo", condicion.getTipoMinimo() == null ? null
+										: condicion.getTipoMinimo().name()),
+						"veredicto", BitacoraDelCaso.datos(
+								"resultado", veredicto.resultado().name(),
+								"fuente", veredicto.fuente() == null ? null : veredicto.fuente().name(),
+								"probabilidad", veredicto.probabilidad(),
+								"respuestaDelTestigo", veredicto.respuestaDelTestigo() == null ? null
+										: veredicto.respuestaDelTestigo().name(),
+								"umbralActuar", condicion.getUmbralActuar(),
+								"umbralPreguntar", condicion.getUmbralPreguntar())),
+				evaluacion);
 	}
 
 	/**

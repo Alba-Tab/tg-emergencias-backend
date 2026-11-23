@@ -18,6 +18,9 @@ public interface EventoDelCasoRepository extends JpaRepository<EventoDelCaso, Lo
 	/** Los renglones de un tipo en todo el incidente, en orden. {@code tipo} es el nombre del enum. */
 	List<EventoDelCaso> findByIncidenteIdAndTipoOrderByIdAsc(Long incidenteId, String tipo);
 
+	/** El renglón más nuevo de ese tipo en el incidente. {@code tipo} es el nombre del enum. */
+	Optional<EventoDelCaso> findFirstByIncidenteIdAndTipoOrderByIdDesc(Long incidenteId, String tipo);
+
 	/** El tipo del renglón más nuevo del incidente entre esos tipos, o vacío si no tiene ninguno. */
 	@Query("""
 			select e.tipo from EventoDelCaso e

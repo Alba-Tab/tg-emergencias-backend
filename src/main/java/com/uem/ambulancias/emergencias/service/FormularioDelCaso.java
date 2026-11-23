@@ -2,7 +2,6 @@ package com.uem.ambulancias.emergencias.service;
 
 import java.time.Instant;
 import java.util.Comparator;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -113,7 +112,7 @@ public class FormularioDelCaso {
 		if (condiciones.isEmpty()) {
 			return List.of();
 		}
-		Set<String> yaPedidas = pedidas(incidente.getId());
+		Set<String> yaPedidas = pedidasDesde(incidente.getId()).keySet();
 		List<String> nuevas = condiciones.stream().filter(condicion -> !yaPedidas.contains(condicion)).toList();
 		if (nuevas.isEmpty()) {
 			return nuevas;
@@ -142,7 +141,7 @@ public class FormularioDelCaso {
 				.orElseThrow(() -> new IllegalStateException("El incidente " + incidente.getId()
 						+ " señala un tipo de suceso que su protocolo no tiene."));
 		Map<String, RespuestaDelTestigo> contestadas = vigentes(alertaId);
-		Set<String> pedidas = pedidas(incidente.getId());
+		Set<String> pedidas = pedidasDesde(incidente.getId()).keySet();
 		return tipo.conPregunta().stream()
 				.map(condicion -> new PreguntaDelCaso(condicion.getCodigo(), condicion.getPregunta(),
 						contestadas.get(condicion.getCodigo()),
@@ -151,13 +150,16 @@ public class FormularioDelCaso {
 				.toList();
 	}
 
-	/** Las condiciones que el sistema ya le pidió contestar a los testigos de ese incidente. */
-	private Set<String> pedidas(Long incidenteId) {
-		Set<String> pedidas = new HashSet<>();
+	/**
+	 * Las condiciones que el sistema ya le pidió contestar a los testigos de ese incidente, cada una con el momento en
+	 * que se pidió. Exige una transacción abierta.
+	 */
+	public Map<String, Instant> pedidasDesde(Long incidenteId) {
+		Map<String, Instant> pedidas = new LinkedHashMap<>();
 		for (EventoDelCaso evento : eventos.findByIncidenteIdAndTipoOrderByIdAsc(incidenteId,
 				TipoEventoDelCaso.PREGUNTA_AL_TESTIGO.name())) {
 			for (JsonNode condicion : json.readTree(evento.getDatos()).path("condiciones")) {
-				pedidas.add(condicion.asString());
+				pedidas.putIfAbsent(condicion.asString(), evento.getOcurridoEn());
 			}
 		}
 		return pedidas;

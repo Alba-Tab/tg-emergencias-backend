@@ -90,7 +90,7 @@ public class SecurityConfig {
 						.requestMatchers(HttpMethod.GET, "/traslados/mios").hasRole(CIUDADANO)
 						// Lo que usa el panel.
 						.requestMatchers(HttpMethod.GET, "/incidentes", "/incidentes/*", "/incidentes/*/unidades",
-								"/incidentes/*/bitacora", "/incidentes/*/evaluaciones")
+								"/incidentes/*/bitacora", "/incidentes/*/evaluaciones", "/incidentes/*/derivaciones")
 						.hasRole(ADMIN)
 						.requestMatchers(HttpMethod.POST, "/incidentes/*/despacho", "/incidentes/*/cierre").hasRole(ADMIN)
 						.requestMatchers(HttpMethod.GET, "/traslados", "/traslados/problemas", "/traslados/*",
@@ -101,6 +101,7 @@ public class SecurityConfig {
 						.hasRole(ADMIN)
 						.requestMatchers("/operacion/**", "/operacion").hasRole(ADMIN)
 						.requestMatchers("/despacho/**").hasRole(ADMIN)
+						.requestMatchers("/derivaciones", "/derivaciones/**").hasRole(ADMIN)
 						.requestMatchers("/reportes/**").hasRole(ADMIN)
 						.requestMatchers("/cobros", "/cobros/**", "/tarifas", "/tarifas/**").hasRole(ADMIN)
 						.requestMatchers("/ambulancias/**", "/asignaciones/**", "/paramedicos/**").hasRole(ADMIN)

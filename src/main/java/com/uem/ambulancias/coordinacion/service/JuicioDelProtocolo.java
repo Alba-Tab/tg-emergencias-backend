@@ -15,6 +15,8 @@ import com.uem.ambulancias.protocolo.domain.TipoDeSuceso;
  * Cómo se decide cada condición del protocolo. Va por escalones, del más directo al menos:
  *
  * <ol>
+ * <li>Lo que ya decidió una persona de la central, o lo que se dio por cumplido ante la duda. Manda sobre todo lo
+ * demás y no se vuelve a consultar.</li>
  * <li>Lo que contestó el testigo. Un «sí» cierra la condición: se cumple y no se consulta a nadie más. Un «no» la
  * descarta, salvo que haya evidencia analizada que pueda decir otra cosa.</li>
  * <li>La regla por cantidad, en las condiciones que la tienen: se cumple cuando los afectados declarados llegan al
@@ -36,8 +38,23 @@ public final class JuicioDelProtocolo {
 	 * @param respuestas       lo que contestó el testigo, por código de condición
 	 * @param afectados        cuántos afectados se declararon, o {@code null} si nadie dijo cuántos
 	 * @param hayEvidenciaUtil si alguna foto o audio analizado sirve para describir lo que pasa
+	 * @param decididas        las condiciones que ya decidió una persona o que se dieron por cumplidas ante la duda
 	 */
-	public record Hechos(Map<String, RespuestaDelTestigo> respuestas, Integer afectados, boolean hayEvidenciaUtil) {
+	public record Hechos(Map<String, RespuestaDelTestigo> respuestas, Integer afectados, boolean hayEvidenciaUtil,
+			Map<String, Decidida> decididas) {
+
+		public Hechos(Map<String, RespuestaDelTestigo> respuestas, Integer afectados, boolean hayEvidenciaUtil) {
+			this(respuestas, afectados, hayEvidenciaUtil, Map.of());
+		}
+
+	}
+
+	/**
+	 * Una condición que ya se decidió fuera de las reglas y del modelo.
+	 *
+	 * @param fuente quién la decidió: la central, o nadie y se dio por cumplida ante la duda
+	 */
+	public record Decidida(boolean cumple, FuenteDelVeredicto fuente) {
 	}
 
 	/** El primer escalón: un veredicto por condición, en el orden del protocolo, y cuáles siguen para el modelo. */
@@ -47,6 +64,11 @@ public final class JuicioDelProtocolo {
 
 	private static Veredicto porReglas(Condicion condicion, Hechos hechos) {
 		RespuestaDelTestigo respuesta = hechos.respuestas().get(condicion.getCodigo());
+		Decidida decidida = hechos.decididas().get(condicion.getCodigo());
+		if (decidida != null) {
+			return new Veredicto(condicion.getCodigo(), decidida.cumple() ? ResultadoDeCondicion.CUMPLIDA
+					: ResultadoDeCondicion.NO_CUMPLIDA, decidida.fuente(), null, respuesta, false);
+		}
 		if (respuesta == RespuestaDelTestigo.SI) {
 			return new Veredicto(condicion.getCodigo(), ResultadoDeCondicion.CUMPLIDA, FuenteDelVeredicto.TESTIGO,
 					null, respuesta, false);

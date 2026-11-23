@@ -104,13 +104,18 @@ public class EvaluacionDelCaso {
 	private Long milisegundosDelModelo;
 
 	public static EvaluacionDelCaso pedir(Incidente incidente, String motivo, Instant ahora) {
+		return pedirPara(incidente, motivo, ahora, ahora);
+	}
+
+	/** Una evaluación que recién se puede tomar desde {@code desde}: para volver a mirar el caso más tarde. */
+	public static EvaluacionDelCaso pedirPara(Incidente incidente, String motivo, Instant ahora, Instant desde) {
 		EvaluacionDelCaso evaluacion = new EvaluacionDelCaso();
 		evaluacion.referencia = UUID.randomUUID();
 		evaluacion.incidente = incidente;
 		evaluacion.estado = EstadoEvaluacion.PENDIENTE.name();
 		evaluacion.motivo = motivo;
 		evaluacion.intentos = 0;
-		evaluacion.proximoIntento = ahora;
+		evaluacion.proximoIntento = desde;
 		evaluacion.creadaEn = ahora;
 		return evaluacion;
 	}

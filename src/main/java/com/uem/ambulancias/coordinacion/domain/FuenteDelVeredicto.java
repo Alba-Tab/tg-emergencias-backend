@@ -13,6 +13,12 @@ public enum FuenteDelVeredicto {
 	REGLA,
 
 	/** Lo estimó el modelo de decisión, y se comparó su probabilidad con los umbrales de la condición. */
-	MODELO
+	MODELO,
+
+	/** Lo decidió una persona de la central a la que el sistema le pasó la condición. Manda sobre todo lo demás. */
+	CENTRAL,
+
+	/** Nadie contestó a tiempo y la condición se dio por cumplida: ante la duda, se atiende como el caso más grave. */
+	ANTE_LA_DUDA
 
 }

@@ -245,4 +245,23 @@ class JuicioDelProtocoloTest {
 		assertThat(plan.porCondiciones()).containsExactly(GRAVE);
 	}
 
+	@Test
+	@Tag("PB-38")
+	@DisplayName("PB-38 · lo que decidió la central manda sobre el testigo y no se vuelve a consultar al modelo")
+	void laCentralManda() {
+		Hechos hechos = new Hechos(Map.of(ATRAPADO, RespuestaDelTestigo.SI), null, true, Map.of(
+				ATRAPADO, new JuicioDelProtocolo.Decidida(false, FuenteDelVeredicto.CENTRAL),
+				FUEGO, new JuicioDelProtocolo.Decidida(true, FuenteDelVeredicto.ANTE_LA_DUDA)));
+
+		List<Veredicto> porReglas = JuicioDelProtocolo.porReglas(ACCIDENTE, hechos);
+		List<Veredicto> finales = JuicioDelProtocolo.conModelo(ACCIDENTE, porReglas,
+				Map.of(ATRAPADO, 0.99, FUEGO, 0.01));
+
+		assertThat(de(finales, ATRAPADO).resultado()).isEqualTo(ResultadoDeCondicion.NO_CUMPLIDA);
+		assertThat(de(finales, ATRAPADO).fuente()).isEqualTo(FuenteDelVeredicto.CENTRAL);
+		assertThat(de(finales, FUEGO).resultado()).isEqualTo(ResultadoDeCondicion.CUMPLIDA);
+		assertThat(de(finales, FUEGO).fuente()).isEqualTo(FuenteDelVeredicto.ANTE_LA_DUDA);
+		assertThat(finales).noneMatch(Veredicto::paraElModelo);
+	}
+
 }

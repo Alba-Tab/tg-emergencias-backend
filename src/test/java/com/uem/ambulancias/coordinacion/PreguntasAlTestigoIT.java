@@ -127,8 +127,11 @@ class PreguntasAlTestigoIT extends PruebaIT {
 		evaluador.barrer();
 
 		pedir(get("/incidentes/" + alerta.incidenteId() + "/evaluaciones"), escenario.admin())
-				.andExpect(jsonPath("$.length()").value(2))
-				.andExpect(jsonPath("$[1].veredictos[0].resultado").value("EN_DUDA"));
+				// La tercera es la que queda programada para cuando al testigo se le acabe el tiempo de contestar.
+				.andExpect(jsonPath("$.length()").value(3))
+				.andExpect(jsonPath("$[1].veredictos[0].resultado").value("EN_DUDA"))
+				.andExpect(jsonPath("$[2].estado").value("PENDIENTE"))
+				.andExpect(jsonPath("$[2].pedidaPor").value("ESPERA_DE_RESPUESTA"));
 		bitacora(alerta.incidenteId()).andExpect(jsonPath(PEDIDA, hasSize(1)));
 		assertThat(avisosA("push-ciudadano")).containsExactly("PREGUNTA_PENDIENTE");
 	}
