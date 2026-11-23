@@ -16,6 +16,12 @@ public enum TipoEventoDelCaso {
 	ALERTA_CANCELADA,
 
 	/** El servicio de análisis terminó de describir una foto o un audio. */
-	EVIDENCIA_ANALIZADA
+	EVIDENCIA_ANALIZADA,
+
+	/** El ciudadano marcó qué pasó. Se anota también cuando el protocolo vigente no conoce ese código. */
+	TIPO_DE_SUCESO_DECLARADO,
+
+	/** El ciudadano contestó una pregunta del formulario de su tipo de suceso. */
+	RESPUESTA_DEL_TESTIGO
 
 }

@@ -205,6 +205,13 @@ public class Escenario {
 		return alertar(ciudadano, LATITUD, LONGITUD);
 	}
 
+	/** Alerta en el centro marcando qué pasó, con un código de tipo de suceso. */
+	public Alerta alertarCon(Ciudadano ciudadano, String tipoSuceso) {
+		String respuesta = enviar(post("/alertas"), ciudadano.token(), Json.objeto("latitud", LATITUD, "longitud",
+				LONGITUD, "origenUbicacion", "GPS", "tipoSuceso", tipoSuceso), 201);
+		return new Alerta(Json.numero(respuesta, "$.alertaId"), Json.numero(respuesta, "$.incidenteId"));
+	}
+
 	/** Toma el incidente con la unidad en turno del paramédico. Devuelve el id de la atención. */
 	public long tomar(Paramedico paramedico, long incidenteId) {
 		return Json.numero(enviar(post("/incidentes/" + incidenteId + "/tomar"), paramedico.token(), null, 201), "$.id");
