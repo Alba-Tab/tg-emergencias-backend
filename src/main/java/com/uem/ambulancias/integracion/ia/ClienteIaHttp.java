@@ -34,11 +34,17 @@ import com.uem.ambulancias.integracion.ia.ContratoIa.EmbeddingResponse;
 import com.uem.ambulancias.integracion.ia.ContratoIa.ErrorResponse;
 import com.uem.ambulancias.integracion.ia.ContratoIa.EvaluationRequest;
 import com.uem.ambulancias.integracion.ia.ContratoIa.EvaluationResponse;
+import com.uem.ambulancias.integracion.ia.ContratoIa.ProtocolReviewRequest;
+import com.uem.ambulancias.integracion.ia.ContratoIa.ProtocolReviewResponse;
 import com.uem.ambulancias.integracion.ia.ContratoIa.Provenance;
 import com.uem.ambulancias.integracion.ia.ContratoIa.ReasoningResponse;
+import com.uem.ambulancias.integracion.ia.ContratoIa.ReviewFact;
+import com.uem.ambulancias.integracion.ia.ContratoIa.ReviewNormExcerpt;
+import com.uem.ambulancias.integracion.ia.ContratoIa.ReviewProposal;
 import com.uem.ambulancias.integracion.ia.ContratoIa.SummaryRequest;
 import com.uem.ambulancias.integracion.ia.ContratoIa.SummaryResponse;
 import com.uem.ambulancias.memoria.service.ModeloDeEmbeddings;
+import com.uem.ambulancias.revision.service.AnalistaDelProtocolo;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpHeaders;
@@ -58,7 +64,8 @@ import org.springframework.web.client.RestClientException;
  * una decisión de despacho no puede quedarse esperando lo que se espera un video.
  */
 @Slf4j
-public class ClienteIaHttp implements ServicioDeAnalisis, ModeloDeDecision, Razonador, ModeloDeEmbeddings {
+public class ClienteIaHttp
+		implements ServicioDeAnalisis, ModeloDeDecision, Razonador, ModeloDeEmbeddings, AnalistaDelProtocolo {
 
 	/** El archivo o el pedido no sirven: reintentar daría lo mismo. */
 	private static final Set<String> DEFINITIVOS = Set.of("invalid_request", "unsupported_media_type",
@@ -90,6 +97,8 @@ public class ClienteIaHttp implements ServicioDeAnalisis, ModeloDeDecision, Razo
 
 	private final boolean embeddingsHabilitado;
 
+	private final boolean analistaHabilitado;
+
 	public ClienteIaHttp(IaProperties config) {
 		// Sin redirecciones: el servicio no las usa, y seguir una mandaría el token a otro lado. HTTP/1.1 porque
 		// uvicorn no habla HTTP/2: el cliente de Java pediría pasar a h2c y el servicio deja un aviso por cada pedido.
@@ -104,6 +113,7 @@ public class ClienteIaHttp implements ServicioDeAnalisis, ModeloDeDecision, Razo
 		this.razonamientoHabilitado = config.razonamientoHabilitado();
 		this.restDeEmbeddings = cliente(http, config, config.lecturaDeEmbeddings());
 		this.embeddingsHabilitado = config.embeddingsHabilitado();
+		this.analistaHabilitado = config.analistaHabilitado();
 	}
 
 	private static RestClient cliente(HttpClient http, IaProperties config, Duration lectura) {
@@ -255,6 +265,44 @@ public class ClienteIaHttp implements ServicioDeAnalisis, ModeloDeDecision, Razo
 			vectores.add(vector);
 		}
 		return new VectoresRecibidos(vectores, respuesta.provenance().model());
+	}
+
+	@Override
+	public boolean listoParaRevisar() {
+		return analistaHabilitado;
+	}
+
+	/** Una revisión tarda lo que un razonamiento: usa su mismo tiempo de espera. */
+	@Override
+	public PropuestasRecibidas revisar(PedidoDeRevision pedido) {
+		ProtocolReviewRequest cuerpo = new ProtocolReviewRequest(pedido.trabajo().toString(), pedido.protocoloJson(),
+				pedido.hechos().stream()
+						.map(hecho -> new ReviewFact(hecho.id(), hecho.tipoDeSuceso(), hecho.condicion(), hecho.texto()))
+						.toList(),
+				pedido.norma().stream()
+						.map(extracto -> new ReviewNormExcerpt(extracto.id(), extracto.cita(), extracto.texto()))
+						.toList());
+		return propuestas(llamar(restDeRazonamientos, "/v1/protocol-reviews", cuerpo, ProtocolReviewResponse.class));
+	}
+
+	/** Las propuestas tal como llegaron. Qué se hace con cada una lo decide quien las pidió. */
+	static PropuestasRecibidas propuestas(ProtocolReviewResponse respuesta) {
+		if (respuesta.proposals() == null) {
+			throw new FalloDelServicioIa("respuesta_incompleta", Desenlace.REINTENTAR);
+		}
+		List<Propuesta> propuestas = new ArrayList<>();
+		for (ReviewProposal recibida : respuesta.proposals()) {
+			if (recibida == null || recibida.kind() == null || recibida.eventType() == null
+					|| recibida.proposal() == null || recibida.rationale() == null) {
+				throw new FalloDelServicioIa("respuesta_incompleta", Desenlace.REINTENTAR);
+			}
+			propuestas.add(new Propuesta(recibida.kind(), recibida.eventType(), recibida.condition(),
+					recibida.proposal(), recibida.rationale(), lista(recibida.factIds()), lista(recibida.normIds())));
+		}
+		Provenance procedencia = respuesta.provenance();
+		return new PropuestasRecibidas(propuestas, respuesta.discarded() == null ? 0 : respuesta.discarded(),
+				procedencia == null ? null : procedencia.provider(), procedencia == null ? null : procedencia.model(),
+				procedencia == null ? null : procedencia.promptVersion());
 	}
 
 	private <T> T llamar(String ruta, Object cuerpo, Class<T> tipo) {

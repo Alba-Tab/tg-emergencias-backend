@@ -24,6 +24,7 @@ import com.uem.ambulancias.evidencias.service.Procedencia;
 import com.uem.ambulancias.evidencias.service.ResumenRecibido;
 import com.uem.ambulancias.evidencias.service.ServicioDeAnalisis;
 import com.uem.ambulancias.memoria.service.ModeloDeEmbeddings;
+import com.uem.ambulancias.revision.service.AnalistaDelProtocolo;
 
 /**
  * Reemplaza al microservicio de IA en las pruebas. Responde lo que la prueba le prepara: por defecto un análisis
@@ -35,7 +36,13 @@ import com.uem.ambulancias.memoria.service.ModeloDeEmbeddings;
  * <p>Y de agente razonador, que arranca apagado para que las pruebas que no lo necesitan no lo vean. Encendido y sin
  * nada preparado, no resuelve ninguna condición: todas quedan en «no se sabe».
  */
-public class ServicioIaFalso implements ServicioDeAnalisis, ModeloDeDecision, Razonador, ModeloDeEmbeddings {
+public class ServicioIaFalso
+		implements ServicioDeAnalisis, ModeloDeDecision, Razonador, ModeloDeEmbeddings, AnalistaDelProtocolo {
+
+	private final List<PedidoDeRevision> revisionesPedidas = new CopyOnWriteArrayList<>();
+	private volatile boolean analistaEncendido;
+	private volatile List<Propuesta> propuestasPreparadas;
+	private volatile FalloDelServicioIa falloDelAnalista;
 
 	public static final String MODELO_DE_EMBEDDINGS = "embeddings-de-prueba";
 
@@ -240,6 +247,48 @@ public class ServicioIaFalso implements ServicioDeAnalisis, ModeloDeDecision, Ra
 		return List.copyOf(textosEmbebidos);
 	}
 
+	@Override
+	public boolean listoParaRevisar() {
+		return analistaEncendido;
+	}
+
+	/**
+	 * Sin nada preparado propone como el analista de prueba del servicio: revisar con más casos la condición del
+	 * primer hecho que nombra una, citándolo.
+	 */
+	@Override
+	public PropuestasRecibidas revisar(PedidoDeRevision pedido) {
+		revisionesPedidas.add(pedido);
+		if (falloDelAnalista != null) {
+			throw falloDelAnalista;
+		}
+		List<Propuesta> propuestas = propuestasPreparadas != null ? propuestasPreparadas
+				: pedido.hechos().stream().filter(hecho -> hecho.condicion() != null).limit(1)
+						.map(hecho -> new Propuesta("other", hecho.tipoDeSuceso(), hecho.condicion(),
+								"Revisar esta condición con más casos antes de cambiarla.",
+								"Es lo que muestra el hecho " + hecho.id() + ".", List.of(hecho.id()), List.of()))
+						.toList();
+		return new PropuestasRecibidas(propuestas, 0, "prueba", "analista-de-prueba", "protocol-review-v1");
+	}
+
+	/** Enciende al analista, que arranca apagado como en el servidor. */
+	public void encenderAnalista() {
+		analistaEncendido = true;
+	}
+
+	/** Lo que el analista va a proponer en la próxima revisión, tal cual. */
+	public void proponer(Propuesta... propuestas) {
+		propuestasPreparadas = List.of(propuestas);
+	}
+
+	public void fallarAnalista(String codigo, FalloDelServicioIa.Desenlace desenlace) {
+		falloDelAnalista = new FalloDelServicioIa(codigo, desenlace);
+	}
+
+	public List<PedidoDeRevision> revisionesPedidas() {
+		return List.copyOf(revisionesPedidas);
+	}
+
 	/** Cada prueba empieza con un servicio que responde bien y sin pedidos anotados. */
 	public void olvidar() {
 		fallosPorEvidencia.clear();
@@ -257,6 +306,10 @@ public class ServicioIaFalso implements ServicioDeAnalisis, ModeloDeDecision, Ra
 		textosEmbebidos.clear();
 		embeddingsEncendidos = false;
 		falloDeLosEmbeddings = null;
+		revisionesPedidas.clear();
+		analistaEncendido = false;
+		propuestasPreparadas = null;
+		falloDelAnalista = null;
 	}
 
 	private static Procedencia procedencia() {
