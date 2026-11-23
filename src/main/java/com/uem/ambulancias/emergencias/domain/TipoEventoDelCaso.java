@@ -22,6 +22,24 @@ public enum TipoEventoDelCaso {
 	TIPO_DE_SUCESO_DECLARADO,
 
 	/** El ciudadano contestó una pregunta del formulario de su tipo de suceso. */
-	RESPUESTA_DEL_TESTIGO
+	RESPUESTA_DEL_TESTIGO,
+
+	/** El sistema le asignó el incidente a una unidad y espera su confirmación. */
+	UNIDAD_ASIGNADA,
+
+	/** La tripulación confirmó la asignación: la unidad va en camino. */
+	ASIGNACION_CONFIRMADA,
+
+	/** La tripulación dijo que no puede ir, con su motivo. */
+	ASIGNACION_RECHAZADA,
+
+	/** Se acabó el tiempo de espera sin que la tripulación contestara. */
+	ASIGNACION_VENCIDA,
+
+	/** La asignación dejó de hacer falta antes de que contestaran. */
+	ASIGNACION_RETIRADA,
+
+	/** No quedó ninguna unidad a la que asignarle el incidente: se abrió a todas. */
+	SIN_UNIDAD_PARA_ASIGNAR
 
 }

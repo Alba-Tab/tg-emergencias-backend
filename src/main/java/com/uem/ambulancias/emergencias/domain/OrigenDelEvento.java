@@ -10,6 +10,12 @@ public enum OrigenDelEvento {
 	CIUDADANO,
 
 	/** Lo describió el servicio de análisis a partir de una evidencia. */
-	ANALISIS
+	ANALISIS,
+
+	/** Lo informó la tripulación de una unidad. */
+	TRIPULACION,
+
+	/** Lo decidió el sistema siguiendo sus reglas, sin que interviniera una persona. */
+	SISTEMA
 
 }
