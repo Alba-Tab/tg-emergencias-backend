@@ -90,7 +90,7 @@ public class SecurityConfig {
 						.requestMatchers(HttpMethod.GET, "/traslados/mios").hasRole(CIUDADANO)
 						// Lo que usa el panel.
 						.requestMatchers(HttpMethod.GET, "/incidentes", "/incidentes/*", "/incidentes/*/unidades",
-								"/incidentes/*/bitacora")
+								"/incidentes/*/bitacora", "/incidentes/*/evaluaciones")
 						.hasRole(ADMIN)
 						.requestMatchers(HttpMethod.POST, "/incidentes/*/despacho", "/incidentes/*/cierre").hasRole(ADMIN)
 						.requestMatchers(HttpMethod.GET, "/traslados", "/traslados/problemas", "/traslados/*",
