@@ -5,6 +5,7 @@ import java.time.Instant;
 import com.uem.ambulancias.comun.error.CodigoError;
 import com.uem.ambulancias.comun.error.ConflictoException;
 import com.uem.ambulancias.comun.geo.Geo;
+import com.uem.ambulancias.flota.domain.TipoUnidad;
 import com.uem.ambulancias.protocolo.domain.Protocolo;
 import com.uem.ambulancias.usuarios.domain.Usuario;
 
@@ -74,6 +75,16 @@ public class Incidente {
 	@JoinColumn(name = "protocolo_id")
 	private Protocolo protocolo;
 
+	/**
+	 * Cuántas unidades necesita el caso según el protocolo. Sin dato, una. Solo sube: el sistema suma recursos, y
+	 * quitarlos lo decide una persona.
+	 */
+	private Integer unidadesRequeridas;
+
+	/** El tipo de unidad que como mínimo tiene que ir, según el protocolo. Sin dato, cualquiera. Solo sube. */
+	@Enumerated(EnumType.STRING)
+	private TipoUnidad tipoMinimoRequerido;
+
 	/** ME-1 I0: nace ACTIVO con la ubicación efectiva y los afectados de su primera alerta. */
 	public static Incidente crear(Point ubicacion, Integer cantidadAfectados, Instant fechaHoraCreacion) {
 		Incidente incidente = new Incidente();
@@ -108,6 +119,28 @@ public class Incidente {
 		this.protocolo = protocolo;
 		this.tipoSuceso = codigo;
 		return true;
+	}
+
+	public int getUnidadesRequeridas() {
+		return unidadesRequeridas == null ? 1 : unidadesRequeridas;
+	}
+
+	/**
+	 * Sube lo que el caso necesita. Una cantidad menor o un tipo de menor capacidad que los que ya tiene no cambian
+	 * nada. Devuelve si algo subió.
+	 */
+	public boolean requerir(int unidades, TipoUnidad tipoMinimo) {
+		boolean subio = false;
+		if (unidades > getUnidadesRequeridas()) {
+			unidadesRequeridas = unidades;
+			subio = true;
+		}
+		if (tipoMinimo != null && (tipoMinimoRequerido == null
+				|| TipoUnidad.elMayor(tipoMinimoRequerido, tipoMinimo) != tipoMinimoRequerido)) {
+			tipoMinimoRequerido = tipoMinimo;
+			subio = true;
+		}
+		return subio;
 	}
 
 	/** Cierre deducido por el sistema a partir de lo que reportaron las unidades. */

@@ -59,6 +59,10 @@ public class PublicadorFirebase
 		}
 		valores.put("descripciones", incidente.descripciones());
 		valores.put("unidadesAcudiendo", incidente.unidadesAcudiendo());
+		valores.put("unidadesRequeridas", incidente.unidadesRequeridas());
+		if (incidente.tipoMinimoRequerido() != null) {
+			valores.put("tipoMinimoRequerido", incidente.tipoMinimoRequerido().name());
+		}
 		valores.put("actualizadoEn", Instant.now().toString());
 		EscriturasFirebase.registrarFallo(nodo(INCIDENTES_ABIERTOS, incidente.id()).setValueAsync(valores),
 				"publicar el incidente " + incidente.id());

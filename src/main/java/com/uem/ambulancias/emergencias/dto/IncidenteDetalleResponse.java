@@ -8,6 +8,7 @@ import com.uem.ambulancias.emergencias.domain.Atencion;
 import com.uem.ambulancias.emergencias.domain.EstadoIncidente;
 import com.uem.ambulancias.emergencias.domain.Incidente;
 import com.uem.ambulancias.emergencias.domain.MotivoCierreIncidente;
+import com.uem.ambulancias.flota.domain.TipoUnidad;
 
 /**
  * Detalle de un incidente en la consulta del panel: los mismos campos del resumen, sus alertas en orden de emisión y
@@ -32,7 +33,13 @@ public record IncidenteDetalleResponse(
 		/** Lo que escribió al cerrarlo; en una falsa alarma, cómo se verificó. */
 		String detalleCierre,
 		/** El código del tipo de suceso que se declaró primero. Nulo si nadie marcó ninguno. */
-		String tipoSuceso) {
+		String tipoSuceso,
+
+		/** Cuántas unidades necesita el caso según el protocolo. Sin nada que lo suba, una. */
+		int unidadesRequeridas,
+
+		/** El tipo de unidad que como mínimo tiene que ir. Nulo si alcanza cualquiera. */
+		TipoUnidad tipoMinimoRequerido) {
 
 	/**
 	 * {@code alertas} con su emisor y {@code atenciones} con su ambulancia, su paramédico responsable y su centro de
@@ -56,7 +63,9 @@ public record IncidenteDetalleResponse(
 				atenciones.stream().map(AtencionDeIncidenteResponse::de).toList(),
 				incidente.getCerradoPor() == null ? null : incidente.getCerradoPor().getNombreCompleto(),
 				incidente.getDetalleCierre(),
-				incidente.getTipoSuceso());
+				incidente.getTipoSuceso(),
+				incidente.getUnidadesRequeridas(),
+				incidente.getTipoMinimoRequerido());
 	}
 
 }
