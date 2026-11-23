@@ -172,6 +172,17 @@ sga.ia.segundos-lectura-razonamiento=90
 # se espera cada pedido de vectores: tiene que ser corto, porque el agente lo pide mientras razona.
 sga.ia.embeddings-habilitado=false
 sga.ia.segundos-lectura-embeddings=10
+# Analista: en true, la central puede pedir una revision del protocolo. El analista mira como funciono y propone
+# mejoras para que las decida una persona; no cambia nada. Usa el tiempo de espera del razonamiento.
+sga.ia.analista-habilitado=false
+
+# Revision del protocolo. Todos tienen valor por defecto.
+# Cada cuantos segundos se miran las revisiones pedidas.
+sga.revision.barrido-seg=5
+# Con menos casos que esto detras, una propuesta de cambiar un umbral no se toma.
+sga.revision.minimo-de-casos=10
+# Cuantos extractos de la norma se le mandan al analista como maximo.
+sga.revision.extractos=6
 
 # Memoria de casos y norma indexada. Todos tienen valor por defecto.
 # Cada cuantos segundos se suman a la memoria los incidentes que se cerraron.
