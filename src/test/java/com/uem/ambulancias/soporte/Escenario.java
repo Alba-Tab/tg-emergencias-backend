@@ -161,6 +161,18 @@ public class Escenario {
 		return paramedico;
 	}
 
+	/** Una unidad en turno, con su posición recién reportada a esa distancia al norte del centro. */
+	public Paramedico unidadEnLaCalle(double alNorte) {
+		Paramedico paramedico = paramedicoEnTurno();
+		reportarPosicion(paramedico, LATITUD + alNorte, LONGITUD);
+		return paramedico;
+	}
+
+	/** La central elige cómo se despacha: {@code DIFUSION} o {@code ASIGNACION}. */
+	public void modoDeDespacho(String modo) {
+		enviar(put("/despacho/ajustes"), admin(), Json.objeto("modo", modo, "segundosConfirmacion", 30), 200);
+	}
+
 	public void asignar(long paramedicoId, long ambulanciaId) {
 		enviar(post("/asignaciones"), admin(),
 				Json.objeto("paramedicoId", paramedicoId, "ambulanciaId", ambulanciaId), 201);
