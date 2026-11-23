@@ -243,6 +243,15 @@ public class IncidenteService {
 		return atencion;
 	}
 
+	/**
+	 * La tripulación confirmó la asignación que le hizo el sistema: el mismo camino que tomar o sumarse, sin exigir
+	 * que el incidente esté libre, porque mientras esperaba la confirmación pudo llegar otra unidad por su cuenta.
+	 */
+	@Transactional
+	public Atencion acudirPorAsignacion(Long idIncidente, Long idAmbulancia, Usuario paramedico) {
+		return crearAtencion(idIncidente, idAmbulancia, paramedico, false);
+	}
+
 	/** Ambulancias que acuden al incidente (atenciones activas), para el contexto del 409. */
 	@Transactional(readOnly = true)
 	public List<Ambulancia> unidadesAcudiendo(Long idIncidente) {
