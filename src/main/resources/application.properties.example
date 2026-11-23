@@ -86,6 +86,17 @@ sga.despacho.segundos-confirmacion=30
 # Cada cuantos segundos corre el barrido que da por vencidas las asignaciones sin respuesta.
 sga.despacho.barrido-seg=5
 
+# Evaluacion de las condiciones del protocolo en cada incidente. Corre con la IA encendida o apagada: sin el modelo
+# de decision se resuelve solo con lo que contesto el testigo. Todos tienen valor por defecto.
+# Cada cuantos segundos el evaluador mira si hay evaluaciones pendientes.
+sga.coordinacion.barrido-seg=2
+# Intentos de consulta al modelo por evaluacion, y la espera entre intentos en segundos (se duplica hasta la maxima).
+sga.coordinacion.maximo-intentos=3
+sga.coordinacion.espera-inicial-seg=5
+sga.coordinacion.espera-maxima-seg=30
+# Segundos que una evaluacion tomada es del evaluador. Mayor que sga.ia.segundos-lectura-evaluacion.
+sga.coordinacion.segundos-bloqueo=90
+
 # Evidencias que el ciudadano adjunta a su alerta (foto, audio o video). Todos tienen valor por defecto.
 # Cuantas puede adjuntar a una misma alerta.
 sga.evidencias.maximo-por-alerta=5
@@ -126,6 +137,8 @@ sga.ia.token=
 # Segundos para conectar y para esperar la respuesta. La lectura tiene que pasar el peor caso del servicio (~265 s con video).
 sga.ia.segundos-conexion=10
 sga.ia.segundos-lectura=300
+# Segundos que se espera la respuesta del modelo de decision (evaluacion de condiciones). Es una llamada corta.
+sga.ia.segundos-lectura-evaluacion=40
 
 # Cola de pedidos al servicio de analisis. Todos tienen valor por defecto.
 # Intentos por trabajo, y la espera entre intentos en segundos (se duplica en cada uno hasta la maxima).
