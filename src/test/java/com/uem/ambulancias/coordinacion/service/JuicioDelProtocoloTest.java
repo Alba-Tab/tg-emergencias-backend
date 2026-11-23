@@ -34,11 +34,30 @@ class JuicioDelProtocoloTest {
 			Condicion.de(FUEGO, "Hay fuego", null, 0.8, 0.4, 0, null, true, null)));
 
 	private static Hechos hechos(boolean hayEvidencia, Object... condicionesYRespuestas) {
+		return hechos(null, hayEvidencia, condicionesYRespuestas);
+	}
+
+	private static Hechos hechos(Integer afectados, boolean hayEvidencia, Object... condicionesYRespuestas) {
 		Map<String, RespuestaDelTestigo> respuestas = new LinkedHashMap<>();
 		for (int i = 0; i < condicionesYRespuestas.length; i += 2) {
 			respuestas.put((String) condicionesYRespuestas[i], (RespuestaDelTestigo) condicionesYRespuestas[i + 1]);
 		}
-		return new Hechos(respuestas, hayEvidencia);
+		return new Hechos(respuestas, afectados, hayEvidencia);
+	}
+
+	private static final String VARIOS = "VARIOS_HERIDOS";
+	private static final String GRAVE = "HERIDO_GRAVE";
+
+	/** VARIOS_HERIDOS se resuelve por cantidad, desde 2 afectados, y pide una unidad más. */
+	private static final TipoDeSuceso CHOQUE = TipoDeSuceso.de("CHOQUE", "Choque", List.of(
+			Condicion.de(VARIOS, "Hay más de un herido", "¿Hay más de un herido?", 0.8, 0.4, 1, null, false, null, 2),
+			Condicion.de(ATRAPADO, "Hay una persona atrapada", null, 0.8, 0.4, 2, TipoUnidad.II, false, null),
+			Condicion.de(GRAVE, "Hay un herido grave", null, 0.8, 0.4, 0, TipoUnidad.III, false, null),
+			Condicion.de(FUEGO, "Hay fuego", null, 0.8, 0.4, 0, null, true, null)));
+
+	private static Veredicto cumplida(String condicion) {
+		return new Veredicto(condicion, ResultadoDeCondicion.CUMPLIDA, FuenteDelVeredicto.TESTIGO, null,
+				RespuestaDelTestigo.SI, false);
 	}
 
 	private static Veredicto de(List<Veredicto> veredictos, String condicion) {
@@ -150,6 +169,80 @@ class JuicioDelProtocoloTest {
 		assertThat(de(finales, ATRAPADO).resultado()).isEqualTo(ResultadoDeCondicion.NO_CUMPLIDA);
 		assertThat(de(finales, ATRAPADO).fuente()).isEqualTo(FuenteDelVeredicto.TESTIGO);
 		assertThat(de(finales, FUEGO).resultado()).isEqualTo(ResultadoDeCondicion.SIN_EVALUAR);
+	}
+
+	@Test
+	@Tag("PB-36")
+	@DisplayName("PB-36 · una condición por cantidad la resuelve la regla con los afectados declarados y nunca va al modelo")
+	void reglaPorCantidad() {
+		Veredicto llega = de(JuicioDelProtocolo.porReglas(CHOQUE, hechos(3, true)), VARIOS);
+		Veredicto justo = de(JuicioDelProtocolo.porReglas(CHOQUE, hechos(2, false)), VARIOS);
+		Veredicto noLlega = de(JuicioDelProtocolo.porReglas(CHOQUE, hechos(1, true)), VARIOS);
+
+		assertThat(llega.resultado()).isEqualTo(ResultadoDeCondicion.CUMPLIDA);
+		assertThat(llega.fuente()).isEqualTo(FuenteDelVeredicto.REGLA);
+		assertThat(justo.resultado()).isEqualTo(ResultadoDeCondicion.CUMPLIDA);
+		assertThat(noLlega.resultado()).isEqualTo(ResultadoDeCondicion.NO_CUMPLIDA);
+		assertThat(noLlega.fuente()).isEqualTo(FuenteDelVeredicto.REGLA);
+		assertThat(List.of(llega, justo, noLlega)).noneMatch(Veredicto::paraElModelo);
+	}
+
+	@Test
+	@Tag("PB-36")
+	@DisplayName("PB-36 · sin la cantidad declarada, la condición por cantidad queda con lo que dijo el testigo o sin evaluar")
+	void reglaPorCantidadSinDato() {
+		Veredicto sinNada = de(JuicioDelProtocolo.porReglas(CHOQUE, hechos(null, true)), VARIOS);
+		Veredicto conNo = de(JuicioDelProtocolo.porReglas(CHOQUE, hechos(null, true, VARIOS, RespuestaDelTestigo.NO)),
+				VARIOS);
+		Veredicto conSi = de(JuicioDelProtocolo.porReglas(CHOQUE, hechos(1, false, VARIOS, RespuestaDelTestigo.SI)),
+				VARIOS);
+
+		assertThat(sinNada.resultado()).isEqualTo(ResultadoDeCondicion.SIN_EVALUAR);
+		assertThat(conNo.resultado()).isEqualTo(ResultadoDeCondicion.NO_CUMPLIDA);
+		assertThat(conNo.fuente()).isEqualTo(FuenteDelVeredicto.TESTIGO);
+		// El «sí» del testigo cierra la condición aunque el número declarado diga otra cosa.
+		assertThat(conSi.resultado()).isEqualTo(ResultadoDeCondicion.CUMPLIDA);
+		assertThat(conSi.fuente()).isEqualTo(FuenteDelVeredicto.TESTIGO);
+		assertThat(List.of(sinNada, conNo, conSi)).noneMatch(Veredicto::paraElModelo);
+	}
+
+	@Test
+	@Tag("PB-36")
+	@DisplayName("PB-36 · sin condiciones cumplidas el plan es la respuesta básica: una unidad de cualquier tipo")
+	void planBasico() {
+		PlanDeRespuesta plan = JuicioDelProtocolo.plan(CHOQUE, JuicioDelProtocolo.porReglas(CHOQUE, hechos(false)));
+
+		assertThat(plan.unidades()).isEqualTo(1);
+		assertThat(plan.tipoMinimo()).isNull();
+		assertThat(plan.porCondiciones()).isEmpty();
+	}
+
+	@Test
+	@Tag("PB-36")
+	@DisplayName("PB-36 · entre varias condiciones cumplidas vale la que más unidades pide, sin sumarlas, y el tipo de mayor capacidad")
+	void planConVariasCondiciones() {
+		PlanDeRespuesta plan = JuicioDelProtocolo.plan(CHOQUE,
+				List.of(cumplida(VARIOS), cumplida(ATRAPADO), cumplida(GRAVE), cumplida(FUEGO)));
+
+		assertThat(plan.unidades()).isEqualTo(3);
+		assertThat(plan.tipoMinimo()).isEqualTo(TipoUnidad.III);
+		// La que solo deriva a una persona no pide recursos: no figura como motivo del plan.
+		assertThat(plan.porCondiciones()).containsExactly(VARIOS, ATRAPADO, GRAVE);
+	}
+
+	@Test
+	@Tag("PB-36")
+	@DisplayName("PB-36 · una condición en duda o descartada no suma nada al plan")
+	void soloLasCumplidasSuman() {
+		List<Veredicto> porReglas = JuicioDelProtocolo.porReglas(CHOQUE, hechos(1, false));
+		List<Veredicto> finales = JuicioDelProtocolo.conModelo(CHOQUE, porReglas,
+				Map.of(ATRAPADO, 0.6, GRAVE, 0.9, FUEGO, 0.1));
+
+		PlanDeRespuesta plan = JuicioDelProtocolo.plan(CHOQUE, finales);
+
+		assertThat(plan.unidades()).isEqualTo(1);
+		assertThat(plan.tipoMinimo()).isEqualTo(TipoUnidad.III);
+		assertThat(plan.porCondiciones()).containsExactly(GRAVE);
 	}
 
 }

@@ -43,7 +43,10 @@ public enum TipoEventoDelCaso {
 	SIN_UNIDAD_PARA_ASIGNAR,
 
 	/** El sistema evaluó las condiciones del protocolo con lo que se sabía del caso hasta ese momento. */
-	CONDICIONES_EVALUADAS;
+	CONDICIONES_EVALUADAS,
+
+	/** Subió lo que el incidente necesita: más unidades o una de más capacidad, por las condiciones que se cumplen. */
+	PLAN_DE_RESPUESTA_ACTUALIZADO;
 
 	/**
 	 * Si el renglón trae algo nuevo sobre lo que pasa en el lugar. Son los que piden volver a evaluar las condiciones

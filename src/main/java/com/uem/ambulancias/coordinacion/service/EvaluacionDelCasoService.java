@@ -15,6 +15,7 @@ import com.uem.ambulancias.emergencias.domain.OrigenDelEvento;
 import com.uem.ambulancias.emergencias.domain.TipoEventoDelCaso;
 import com.uem.ambulancias.emergencias.repository.IncidenteRepository;
 import com.uem.ambulancias.emergencias.service.BitacoraDelCaso;
+import com.uem.ambulancias.emergencias.service.RecursosDelIncidente;
 import com.uem.ambulancias.evidencias.service.FalloDelServicioIa.Desenlace;
 import com.uem.ambulancias.protocolo.domain.Condicion;
 import com.uem.ambulancias.protocolo.domain.TipoDeSuceso;
@@ -39,6 +40,7 @@ public class EvaluacionDelCasoService {
 	private final ColaDeEvaluaciones cola;
 	private final ArmadorDelEstado armador;
 	private final BitacoraDelCaso bitacora;
+	private final RecursosDelIncidente recursos;
 	private final CoordinacionProperties config;
 	private final JsonMapper json;
 
@@ -78,6 +80,9 @@ public class EvaluacionDelCasoService {
 			cerrar(evaluacion, incidente, tipo, porReglas, MetodoDeEvaluacion.REGLAS, ahora);
 			return Optional.empty();
 		}
+		// Lo que las reglas ya resolvieron se aplica ahora, sin esperar al modelo: si el testigo dijo que hay alguien
+		// atrapado, la unidad que eso pide sale ya.
+		aplicarPlan(evaluacion, incidente, tipo, porReglas, true);
 		return Optional.of(new PedidoDeEvaluacion(evaluacion.getReferencia(), incidente.getId(), estadoJson, abiertas));
 	}
 
@@ -205,6 +210,22 @@ public class EvaluacionDelCasoService {
 						"hastaEvento", evaluacion.getHastaEvento(),
 						"tipoDeSuceso", tipo.getCodigo(),
 						"veredictos", detalle));
+		aplicarPlan(evaluacion, incidente, tipo, veredictos, false);
+	}
+
+	/**
+	 * Lleva al incidente lo que piden las condiciones que se cumplen. Solo sube lo que el incidente necesita: una
+	 * evaluación posterior con menos condiciones cumplidas no le quita nada.
+	 *
+	 * @param adelantado si se aplica con lo que resolvieron las reglas, antes de que responda el modelo
+	 */
+	private void aplicarPlan(EvaluacionDelCaso evaluacion, Incidente incidente, TipoDeSuceso tipo,
+			List<Veredicto> veredictos, boolean adelantado) {
+		PlanDeRespuesta plan = JuicioDelProtocolo.plan(tipo, veredictos);
+		recursos.requerir(incidente, plan.unidades(), plan.tipoMinimo(), BitacoraDelCaso.datos(
+				"evaluacionId", evaluacion.getId(),
+				"porCondiciones", plan.porCondiciones(),
+				"antesDelModelo", adelantado ? true : null));
 	}
 
 }

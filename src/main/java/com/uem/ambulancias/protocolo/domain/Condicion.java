@@ -71,6 +71,12 @@ public class Condicion {
 	@Column(nullable = false)
 	private boolean derivaAPersona;
 
+	/**
+	 * Para las condiciones que dependen de una cantidad: se cumple cuando los afectados declarados llegan a este
+	 * número. Una condición así la resuelve una regla y nunca se le consulta al modelo, que no cuenta bien.
+	 */
+	private Integer afectadosDesde;
+
 	/** De qué parte de la norma sale esta condición y su respuesta. */
 	@Column(length = 1000)
 	private String cita;
@@ -81,6 +87,14 @@ public class Condicion {
 	public static Condicion de(String codigo, String enunciado, String pregunta, double umbralActuar,
 			double umbralPreguntar, int unidadesAdicionales, TipoUnidad tipoMinimo, boolean derivaAPersona,
 			String cita) {
+		return de(codigo, enunciado, pregunta, umbralActuar, umbralPreguntar, unidadesAdicionales, tipoMinimo,
+				derivaAPersona, cita, null);
+	}
+
+	/** Lo mismo, para una condición que además se resuelve por la cantidad de afectados. */
+	public static Condicion de(String codigo, String enunciado, String pregunta, double umbralActuar,
+			double umbralPreguntar, int unidadesAdicionales, TipoUnidad tipoMinimo, boolean derivaAPersona,
+			String cita, Integer afectadosDesde) {
 		if (umbralPreguntar <= 0 || umbralActuar > 1 || umbralPreguntar > umbralActuar) {
 			throw new ConflictoException(CodigoError.PROTOCOLO_INVALIDO, "Los umbrales de " + codigo
 					+ " tienen que estar entre 0 y 1, y el de preguntar no puede pasar al de actuar.");
@@ -88,6 +102,15 @@ public class Condicion {
 		if (unidadesAdicionales < 0) {
 			throw new ConflictoException(CodigoError.PROTOCOLO_INVALIDO,
 					"Las unidades adicionales de " + codigo + " no pueden ser negativas.");
+		}
+		if (tipoMinimo != null && !TipoUnidad.ESCALERA.contains(tipoMinimo)) {
+			// Una unidad de rescate no traslada: pedirla es pedir apoyo a otra institución, y eso lo decide una persona.
+			throw new ConflictoException(CodigoError.PROTOCOLO_INVALIDO, "El tipo mínimo de " + codigo
+					+ " tiene que ser una unidad que traslada: IA, II o III.");
+		}
+		if (afectadosDesde != null && afectadosDesde < 1) {
+			throw new ConflictoException(CodigoError.PROTOCOLO_INVALIDO,
+					"La cantidad de afectados de " + codigo + " tiene que ser al menos 1.");
 		}
 		Condicion condicion = new Condicion();
 		condicion.codigo = codigo;
@@ -99,12 +122,13 @@ public class Condicion {
 		condicion.tipoMinimo = tipoMinimo;
 		condicion.derivaAPersona = derivaAPersona;
 		condicion.cita = cita;
+		condicion.afectadosDesde = afectadosDesde;
 		return condicion;
 	}
 
 	public Condicion copiar() {
 		return de(codigo, enunciado, pregunta, umbralActuar, umbralPreguntar, unidadesAdicionales, tipoMinimo,
-				derivaAPersona, cita);
+				derivaAPersona, cita, afectadosDesde);
 	}
 
 	void asignar(TipoDeSuceso tipoDeSuceso, int orden) {

@@ -7,6 +7,7 @@ import com.uem.ambulancias.flota.domain.TipoUnidad;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
@@ -73,7 +74,11 @@ public record GuardarProtocoloRequest(
 			Boolean derivaAPersona,
 
 			@Size(max = 1000, message = "La cita es demasiado larga.")
-			String cita) {
+			String cita,
+
+			/** Opcional: la condición se cumple cuando los afectados declarados llegan a esta cantidad. */
+			@Min(value = 1, message = "La cantidad de afectados debe ser al menos 1.")
+			Integer afectadosDesde) {
 	}
 
 }

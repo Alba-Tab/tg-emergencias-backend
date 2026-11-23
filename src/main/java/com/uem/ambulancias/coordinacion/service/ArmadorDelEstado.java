@@ -44,6 +44,8 @@ public class ArmadorDelEstado {
 	/** Con este nombre lo lee también el modelo de decisión de prueba del servicio de IA. */
 	static final String RESPUESTAS = "respuestasDelTestigo";
 
+	static final String AFECTADOS = "afectadosDeclarados";
+
 	/** Cuántas frases de cada lista de un análisis se incluyen: más no suma y alarga el estado. */
 	private static final int MAXIMO_DE_FRASES = 8;
 
@@ -87,7 +89,7 @@ public class ArmadorDelEstado {
 		suceso.put("nombre", tipo.getNombre());
 		estado.put("tipoDeSuceso", suceso);
 		if (incidente.getCantidadAfectados() != null) {
-			estado.put("afectadosDeclarados", incidente.getCantidadAfectados());
+			estado.put(AFECTADOS, incidente.getCantidadAfectados());
 		}
 		estado.put("personasQueAlertaron", delIncidente.size() - retiradas.size());
 		Map<String, String> respuestasDelTestigo = new LinkedHashMap<>();
@@ -99,7 +101,8 @@ public class ArmadorDelEstado {
 				.ifPresent(resumen -> estado.put("resumenDelIncidente", resumen));
 
 		Long hastaEvento = bitacora.isEmpty() ? null : bitacora.getLast().getId();
-		return new EstadoArmado(estado, new JuicioDelProtocolo.Hechos(respuestas, !evidencias.isEmpty()), hastaEvento);
+		return new EstadoArmado(estado, new JuicioDelProtocolo.Hechos(respuestas, incidente.getCantidadAfectados(),
+				!evidencias.isEmpty()), hastaEvento);
 	}
 
 	/** Los hechos que usan las reglas, releídos de un estado que ya se armó y se guardó. */
@@ -107,7 +110,9 @@ public class ArmadorDelEstado {
 		Map<String, RespuestaDelTestigo> respuestas = new LinkedHashMap<>();
 		estado.path(RESPUESTAS).properties().forEach(campo -> respuestas.put(campo.getKey(),
 				RespuestaDelTestigo.valueOf(campo.getValue().asString())));
-		return new JuicioDelProtocolo.Hechos(respuestas, !estado.path("evidencias").isEmpty());
+		JsonNode afectados = estado.path(AFECTADOS);
+		return new JuicioDelProtocolo.Hechos(respuestas, afectados.isNumber() ? afectados.asInt() : null,
+				!estado.path("evidencias").isEmpty());
 	}
 
 	/**

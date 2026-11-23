@@ -1,11 +1,13 @@
 package com.uem.ambulancias.coordinacion.service;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
 import com.uem.ambulancias.coordinacion.domain.FuenteDelVeredicto;
 import com.uem.ambulancias.coordinacion.domain.ResultadoDeCondicion;
 import com.uem.ambulancias.emergencias.domain.RespuestaDelTestigo;
+import com.uem.ambulancias.flota.domain.TipoUnidad;
 import com.uem.ambulancias.protocolo.domain.Condicion;
 import com.uem.ambulancias.protocolo.domain.TipoDeSuceso;
 
@@ -15,6 +17,8 @@ import com.uem.ambulancias.protocolo.domain.TipoDeSuceso;
  * <ol>
  * <li>Lo que contestó el testigo. Un «sí» cierra la condición: se cumple y no se consulta a nadie más. Un «no» la
  * descarta, salvo que haya evidencia analizada que pueda decir otra cosa.</li>
+ * <li>La regla por cantidad, en las condiciones que la tienen: se cumple cuando los afectados declarados llegan al
+ * número del protocolo. Esas condiciones nunca van al modelo, que no cuenta bien.</li>
  * <li>El modelo de decisión, para lo que quedó abierto. Su probabilidad se compara con los dos umbrales de la
  * condición: desde el de actuar se cumple, desde el de preguntar queda en duda y por debajo no se cumple.</li>
  * </ol>
@@ -30,9 +34,10 @@ public final class JuicioDelProtocolo {
 	 * Lo que se sabe del caso sin interpretar nada.
 	 *
 	 * @param respuestas       lo que contestó el testigo, por código de condición
+	 * @param afectados        cuántos afectados se declararon, o {@code null} si nadie dijo cuántos
 	 * @param hayEvidenciaUtil si alguna foto o audio analizado sirve para describir lo que pasa
 	 */
-	public record Hechos(Map<String, RespuestaDelTestigo> respuestas, boolean hayEvidenciaUtil) {
+	public record Hechos(Map<String, RespuestaDelTestigo> respuestas, Integer afectados, boolean hayEvidenciaUtil) {
 	}
 
 	/** El primer escalón: un veredicto por condición, en el orden del protocolo, y cuáles siguen para el modelo. */
@@ -46,12 +51,33 @@ public final class JuicioDelProtocolo {
 			return new Veredicto(condicion.getCodigo(), ResultadoDeCondicion.CUMPLIDA, FuenteDelVeredicto.TESTIGO,
 					null, respuesta, false);
 		}
+		if (condicion.getAfectadosDesde() != null) {
+			return porCantidad(condicion, hechos.afectados(), respuesta);
+		}
 		if (respuesta == RespuestaDelTestigo.NO) {
 			// Quien está en el lugar dijo que no. Solo se vuelve a mirar si hay una evidencia que pueda contradecirlo.
 			return new Veredicto(condicion.getCodigo(), ResultadoDeCondicion.NO_CUMPLIDA, FuenteDelVeredicto.TESTIGO,
 					null, respuesta, hechos.hayEvidenciaUtil());
 		}
 		return new Veredicto(condicion.getCodigo(), ResultadoDeCondicion.SIN_EVALUAR, null, null, respuesta, true);
+	}
+
+	/**
+	 * Una condición que depende de la cantidad de afectados. Con la cantidad declarada decide la regla; sin ella vale
+	 * el «no» del testigo, si lo dio, y si no queda sin evaluar. En ningún caso sigue para el modelo.
+	 */
+	private static Veredicto porCantidad(Condicion condicion, Integer afectados, RespuestaDelTestigo respuesta) {
+		if (afectados != null) {
+			ResultadoDeCondicion resultado = afectados >= condicion.getAfectadosDesde()
+					? ResultadoDeCondicion.CUMPLIDA
+					: ResultadoDeCondicion.NO_CUMPLIDA;
+			return new Veredicto(condicion.getCodigo(), resultado, FuenteDelVeredicto.REGLA, null, respuesta, false);
+		}
+		if (respuesta == RespuestaDelTestigo.NO) {
+			return new Veredicto(condicion.getCodigo(), ResultadoDeCondicion.NO_CUMPLIDA, FuenteDelVeredicto.TESTIGO,
+					null, respuesta, false);
+		}
+		return new Veredicto(condicion.getCodigo(), ResultadoDeCondicion.SIN_EVALUAR, null, null, respuesta, false);
 	}
 
 	/**
@@ -69,6 +95,31 @@ public final class JuicioDelProtocolo {
 			return new Veredicto(veredicto.condicion(), segunUmbrales(condicion, probabilidad),
 					FuenteDelVeredicto.MODELO, probabilidad, veredicto.respuestaDelTestigo(), true);
 		}).toList();
+	}
+
+	/**
+	 * Lo que el caso necesita según las condiciones que se cumplen. Las unidades no se suman entre condiciones: vale
+	 * la que más pide, como en un plan de despacho por determinantes. El tipo mínimo es el mayor de los que piden.
+	 */
+	public static PlanDeRespuesta plan(TipoDeSuceso tipo, List<Veredicto> veredictos) {
+		int adicionales = 0;
+		TipoUnidad tipoMinimo = null;
+		List<String> porCondiciones = new ArrayList<>();
+		for (Veredicto veredicto : veredictos) {
+			if (!veredicto.cumplida()) {
+				continue;
+			}
+			Condicion condicion = tipo.buscarCondicion(veredicto.condicion()).orElseThrow();
+			adicionales = Math.max(adicionales, condicion.getUnidadesAdicionales());
+			if (condicion.getTipoMinimo() != null) {
+				tipoMinimo = tipoMinimo == null ? condicion.getTipoMinimo()
+						: TipoUnidad.elMayor(tipoMinimo, condicion.getTipoMinimo());
+			}
+			if (condicion.getUnidadesAdicionales() > 0 || condicion.getTipoMinimo() != null) {
+				porCondiciones.add(condicion.getCodigo());
+			}
+		}
+		return new PlanDeRespuesta(1 + adicionales, tipoMinimo, List.copyOf(porCondiciones));
 	}
 
 	static ResultadoDeCondicion segunUmbrales(Condicion condicion, double probabilidad) {

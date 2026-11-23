@@ -141,4 +141,29 @@ class ProtocoloTest {
 		assertThat(condicion.getUnidadesAdicionales()).isEqualTo(1);
 	}
 
+	@Test
+	@Tag("PB-36")
+	@DisplayName("PB-36 · el tipo mínimo de una condición tiene que ser una unidad que traslada: una de rescate no vale")
+	void tipoMinimoDeLaEscalera() {
+		rechazaCon(CodigoError.PROTOCOLO_INVALIDO,
+				() -> Condicion.de("ATRAPADO", "Hay un atrapado", null, 0.8, 0.4, 0, TipoUnidad.IB, false, null));
+
+		assertThat(Condicion.de("ATRAPADO", "Hay un atrapado", null, 0.8, 0.4, 0, TipoUnidad.IA, false, null)
+				.getTipoMinimo()).isEqualTo(TipoUnidad.IA);
+	}
+
+	@Test
+	@Tag("PB-36")
+	@DisplayName("PB-36 · una condición por cantidad pide al menos un afectado y conserva el número al copiarse")
+	void condicionPorCantidad() {
+		rechazaCon(CodigoError.PROTOCOLO_INVALIDO,
+				() -> Condicion.de("VARIOS", "Hay varios heridos", null, 0.8, 0.4, 1, null, false, null, 0));
+
+		Condicion varios = Condicion.de("VARIOS", "Hay varios heridos", null, 0.8, 0.4, 1, null, false, null, 2);
+
+		assertThat(varios.getAfectadosDesde()).isEqualTo(2);
+		assertThat(varios.copiar().getAfectadosDesde()).isEqualTo(2);
+		assertThat(condicion("ATRAPADO", null).getAfectadosDesde()).isNull();
+	}
+
 }

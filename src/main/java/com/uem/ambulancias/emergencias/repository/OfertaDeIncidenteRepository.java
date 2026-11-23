@@ -32,7 +32,12 @@ public interface OfertaDeIncidenteRepository extends JpaRepository<OfertaDeIncid
 	@Query("select o.incidente.id from OfertaDeIncidente o where o.id = :id")
 	Optional<Long> buscarIncidenteId(@Param("id") Long id);
 
-	@Query("select o from OfertaDeIncidente o where o.incidente.id = :incidenteId and o.estado = 'PENDIENTE'")
+	/** Las asignaciones del incidente que esperan respuesta, de la más vieja a la más nueva. */
+	@Query("""
+			select o from OfertaDeIncidente o
+			where o.incidente.id = :incidenteId and o.estado = 'PENDIENTE'
+			order by o.id
+			""")
 	List<OfertaDeIncidente> buscarPendientesDeIncidente(@Param("incidenteId") Long incidenteId);
 
 	@Query("select coalesce(max(o.ronda), 0) from OfertaDeIncidente o where o.incidente.id = :incidenteId")

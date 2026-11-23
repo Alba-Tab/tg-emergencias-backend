@@ -103,17 +103,34 @@ public class DifusionDeIncidentes {
 		}
 	}
 
+	/**
+	 * El incidente pasó a necesitar más unidades o una de más capacidad. En modo difusión nadie le asigna otra: se
+	 * avisa a las de turno que hace falta apoyo, para que se sume la que pueda. En modo asignación no se avisa a
+	 * todas: el sistema le asigna el caso a otra unidad y el aviso le llega a ella.
+	 */
+	@TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+	@Transactional(propagation = Propagation.REQUIRES_NEW, readOnly = true)
+	public void pedirApoyo(IncidenteRequiereRecursos evento) {
+		try {
+			if (ajustes.modo() != ModoDeDespacho.DIFUSION) {
+				return;
+			}
+			incidentes.findById(evento.incidenteId())
+					.filter(incidente -> incidente.getEstado().isAbierto())
+					.ifPresent(incidente -> {
+						Point ubicacion = incidente.getUbicacion();
+						List<Ambulancia> disponibles =
+								ambulancias.buscarDisponiblesPorCercania(ubicacion.getY(), ubicacion.getX());
+						notificador.notificarNuevoIncidente(tokensPorCercania(disponibles), publicado(incidente,
+								atenciones.buscarActivasPorIncidente(incidente.getId()).size()));
+					});
+		} catch (RuntimeException e) {
+			log.error("No se pudo pedir apoyo para el incidente {}.", evento.incidenteId(), e);
+		}
+	}
+
 	private IncidentePublicado publicado(Incidente incidente, int unidadesAcudiendo) {
-		Point ubicacion = incidente.getUbicacion();
-		return new IncidentePublicado(
-				incidente.getId(),
-				ubicacion.getY(),
-				ubicacion.getX(),
-				incidente.getEstado(),
-				incidente.getFechaHoraCreacion(),
-				incidente.getCantidadAfectados(),
-				alertas.buscarDescripciones(incidente.getId()),
-				unidadesAcudiendo);
+		return IncidentePublicado.de(incidente, alertas.buscarDescripciones(incidente.getId()), unidadesAcudiendo);
 	}
 
 	private static SeguimientoPublicado seguimiento(Incidente incidente, List<Atencion> activas) {
