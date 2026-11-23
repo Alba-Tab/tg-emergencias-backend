@@ -94,7 +94,10 @@ class EvaluacionDeCondicionesIT extends PruebaIT {
 		assertThat(pedido.preguntas().getFirst().enunciado()).isEqualTo("Hay una persona atrapada");
 		// Sin nada contestado, el modelo de prueba da 0,5: entre los dos umbrales de cada condición.
 		evaluaciones(alerta.incidenteId())
-				.andExpect(jsonPath("$.length()").value(1))
+				// La segunda queda programada para más tarde: es la que va a notar si el testigo no contestó (PB-38).
+				.andExpect(jsonPath("$.length()").value(2))
+				.andExpect(jsonPath("$[1].estado").value("PENDIENTE"))
+				.andExpect(jsonPath("$[1].pedidaPor").value("ESPERA_DE_RESPUESTA"))
 				.andExpect(jsonPath("$[0].estado").value("HECHA"))
 				.andExpect(jsonPath("$[0].pedidaPor").value("TIPO_DE_SUCESO_DECLARADO"))
 				.andExpect(jsonPath("$[0].metodo").value("MODELO"))
