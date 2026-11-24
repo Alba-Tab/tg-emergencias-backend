@@ -58,6 +58,13 @@ services:
       SGA_IA_HABILITADO: ${IA_HABILITADA:-false}
       SGA_IA_URL: http://mia:8000
       SGA_IA_TOKEN: ${AI_SERVICE_TOKEN}
+      # Herramientas del agente en /mcp. mia se presenta con este mismo token; vacío, la ruta no existe.
+      SGA_AGENTE_TOKEN: ${SGA_AGENTE_TOKEN:-}
+      # Razonamiento, búsqueda por parecido y analista. El razonamiento necesita SGA_AGENTE_TOKEN.
+      # Tras encender los embeddings hay que pedir POST /norma/indexacion una vez.
+      SGA_IA_RAZONAMIENTOHABILITADO: ${IA_RAZONAMIENTO_HABILITADO:-false}
+      SGA_IA_EMBEDDINGSHABILITADO: ${IA_EMBEDDINGS_HABILITADOS:-false}
+      SGA_IA_ANALISTAHABILITADO: ${IA_ANALISTA_HABILITADO:-false}
     volumes:
       - ${RUTA_FIREBASE_JSON}:/app/firebase-credenciales.json:ro
 
@@ -71,6 +78,12 @@ services:
       AI_SERVICE_TOKEN: ${AI_SERVICE_TOKEN}
       AI_OPENROUTER_API_KEY: ${AI_OPENROUTER_API_KEY}
       AI_OPENROUTER_MODEL: ${AI_OPENROUTER_MODEL:-google/gemini-3.8-flash}
+      # Modelo de decisión y de embeddings. Si se cambian, hay que volver a medir los umbrales y a indexar la norma.
+      AI_DECISION_MODEL: ${AI_DECISION_MODEL:-typesafe/jev-1.13}
+      AI_EMBEDDING_MODEL: ${AI_EMBEDDING_MODEL:-openai/text-embedding-3-small}
+      # El razonador saca sus herramientas del backend por la red interna, con el token del agente.
+      AI_BACKEND_MCP_URL: http://backend:8080/mcp
+      AI_BACKEND_MCP_TOKEN: ${SGA_AGENTE_TOKEN:-}
 
   caddy:
     image: caddy:2
