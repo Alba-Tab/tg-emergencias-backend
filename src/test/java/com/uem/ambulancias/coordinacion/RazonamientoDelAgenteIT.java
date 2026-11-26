@@ -34,6 +34,21 @@ class RazonamientoDelAgenteIT extends PruebaIT {
 	private static final String ACCIDENTE = "ACCIDENTE_DE_TRANSITO";
 	private static final String ATRAPADA = "PERSONA_ATRAPADA";
 	private static final String CONTRADICCION = "FUENTES_CONTRADICTORIAS";
+	private static final String NO_RESPIRA = "NO_RESPIRA";
+
+	/** Un accidente con una condición roja y otra que no fija prioridad, las dos con pregunta. */
+	private static final String PROTOCOLO_CON_ROJA = """
+			{"nota": "Protocolo de prueba con una condición roja", "tipos": [
+			  {"codigo": "ACCIDENTE_DE_TRANSITO", "nombre": "Accidente de tránsito", "condiciones": [
+			    {"codigo": "NO_RESPIRA", "enunciado": "Hay una persona que no respira",
+			     "pregunta": "¿Hay alguien que no respira?", "umbralActuar": 0.8, "umbralPreguntar": 0.4,
+			     "prioridad": "ROJA"},
+			    {"codigo": "PERSONA_ATRAPADA", "enunciado": "Hay una persona atrapada",
+			     "pregunta": "¿Hay alguien atrapado?", "umbralActuar": 0.8, "umbralPreguntar": 0.4,
+			     "unidadesAdicionales": 1, "tipoMinimo": "II"}
+			  ]}
+			]}
+			""";
 
 	private static final String DECIDIDA = "$[?(@.tipo == 'CONDICION_DECIDIDA')]";
 	private static final String RAZONADO = "$[?(@.tipo == 'RAZONAMIENTO_DEL_AGENTE')]";
@@ -86,6 +101,20 @@ class RazonamientoDelAgenteIT extends PruebaIT {
 		ia.analizarCon(ANALISIS_UTIL);
 		escenario.evidenciaSubida(ciudadano, alerta.alertaId(), "image/jpeg");
 		analizador.barrer();
+	}
+
+	private void responder(Ciudadano ciudadano, Alerta alerta, String condicion, String valor) throws Exception {
+		pedir(post("/alertas/" + alerta.alertaId() + "/respuestas"), ciudadano.token(),
+				"{\"respuestas\": [" + Json.objeto("condicion", condicion, "valor", valor) + "]}")
+				.andExpect(status().isOk());
+	}
+
+	/** Al testigo se le acabó el tiempo de contestar, y la evaluación que lo esperaba ya se puede tomar. */
+	private void pasarElTiempoDelTestigo() {
+		jdbc.update("update evento_del_caso set ocurrido_en = ocurrido_en - interval '10 minutes' "
+				+ "where tipo = 'PREGUNTA_AL_TESTIGO'");
+		jdbc.update("update evaluacion_del_caso set proximo_intento = now() - interval '1 hour' "
+				+ "where estado = 'PENDIENTE'");
 	}
 
 	@Test
@@ -227,6 +256,188 @@ class RazonamientoDelAgenteIT extends PruebaIT {
 				.containsExactly(CONTRADICCION);
 		bitacora(alerta.incidenteId())
 				.andExpect(jsonPath("$[?(@.tipo == 'CONDICION_DECIDIDA' && @.origen == 'AGENTE')]").isEmpty());
+	}
+
+	@Test
+	@DisplayName("PB-40 · CP-40-06 · el agente razona mientras se espera al testigo; si no sabe, la condición va a una persona recién al vencer el plazo, sin pedirle otro razonamiento")
+	void razonaMientrasEsperaAlTestigo() throws Exception {
+		escenario.protocoloVigente();
+		ia.encenderRazonador();
+		Ciudadano ciudadano = escenario.ciudadano();
+		Alerta alerta = escenario.alertarCon(ciudadano, ACCIDENTE);
+		otraEvidencia(ciudadano, alerta);
+
+		evaluador.barrer();
+
+		// Al testigo se le acaba de preguntar y ya se le pide el razonamiento al agente, sin esperar su respuesta.
+		razonamientos(alerta.incidenteId())
+				.andExpect(jsonPath("$.length()").value(1))
+				.andExpect(jsonPath("$[0].condiciones[0].codigo").value(ATRAPADA))
+				.andExpect(jsonPath("$[0].condiciones[0].esperaAlTestigoHasta").isNotEmpty())
+				.andExpect(jsonPath("$[0].condiciones[1].codigo").value(CONTRADICCION))
+				.andExpect(jsonPath("$[0].condiciones[1].esperaAlTestigoHasta").doesNotExist());
+		derivaciones(alerta.incidenteId()).andExpect(jsonPath("$.length()").value(0));
+
+		razonador.barrer();
+
+		// El agente no sabe ninguna: la que no tiene pregunta va ya a una persona; la otra espera al testigo.
+		derivaciones(alerta.incidenteId())
+				.andExpect(jsonPath("$.length()").value(1))
+				.andExpect(jsonPath("$[0].condicion").value(CONTRADICCION));
+
+		pasarElTiempoDelTestigo();
+		evaluador.barrer();
+
+		derivaciones(alerta.incidenteId())
+				.andExpect(jsonPath("$.length()").value(2))
+				.andExpect(jsonPath("$[1].condicion").value(ATRAPADA))
+				.andExpect(jsonPath("$[1].detalle.porQue").value("EL_TESTIGO_NO_CONTESTO"))
+				.andExpect(jsonPath("$[1].detalle.razonamiento.justificacion").value("La información no alcanza."))
+				.andExpect(jsonPath("$[1].detalle.razonamiento.razonamientoId").isNumber());
+		assertThat(ia.razonamientosPedidos()).hasSize(1);
+		razonamientos(alerta.incidenteId()).andExpect(jsonPath("$.length()").value(1));
+	}
+
+	@Test
+	@DisplayName("PB-40 · CP-40-07 · lo que el agente resolvió mientras se esperaba al testigo se aplica, y una respuesta del testigo que llega después lo reemplaza")
+	void laRespuestaDelTestigoReemplazaAlAgente() throws Exception {
+		ia.concluir(ATRAPADA, ConclusionDelAgente.NO_CUMPLE, "La foto muestra los dos autos vacíos.", "evidencia");
+		escenario.protocoloVigente();
+		ia.encenderRazonador();
+		Ciudadano ciudadano = escenario.ciudadano();
+		Alerta alerta = escenario.alertarCon(ciudadano, ACCIDENTE);
+		otraEvidencia(ciudadano, alerta);
+		evaluador.barrer();
+		razonador.barrer();
+		bitacora(alerta.incidenteId())
+				.andExpect(jsonPath(DECIDIDA + ".datos.condicion").value(ATRAPADA))
+				.andExpect(jsonPath(DECIDIDA + ".datos.cumple").value(false))
+				.andExpect(jsonPath(DECIDIDA + ".datos.por").value("AGENTE"));
+
+		responder(ciudadano, alerta, ATRAPADA, "SI");
+		evaluador.barrer();
+
+		pedir(get("/incidentes/" + alerta.incidenteId() + "/evaluaciones"), escenario.admin())
+				.andExpect(jsonPath("$[-1:].veredictos[0].resultado").value("CUMPLIDA"))
+				.andExpect(jsonPath("$[-1:].veredictos[0].fuente").value("TESTIGO"));
+		pedir(get("/incidentes/" + alerta.incidenteId()), escenario.admin())
+				.andExpect(jsonPath("$.unidadesRequeridas").value(2));
+		assertThat(ia.razonamientosPedidos()).hasSize(1);
+	}
+
+	@Test
+	@DisplayName("PB-40 · CP-40-08 · sin evidencia, sin casos del mismo tipo y con una sola alerta, el agente no entra: lo que no se resuelve va a una persona, tras el plazo del testigo si tiene pregunta")
+	void sinNadaQueRazonar() throws Exception {
+		escenario.protocoloVigente();
+		ia.encenderRazonador();
+		Alerta alerta = escenario.alertarCon(escenario.ciudadano(), ACCIDENTE);
+
+		evaluador.barrer();
+
+		razonamientos(alerta.incidenteId()).andExpect(jsonPath("$.length()").value(0));
+		derivaciones(alerta.incidenteId())
+				.andExpect(jsonPath("$.length()").value(1))
+				.andExpect(jsonPath("$[0].condicion").value(CONTRADICCION))
+				.andExpect(jsonPath("$[0].detalle.porQue").value("SIN_PREGUNTA_PARA_EL_TESTIGO"))
+				.andExpect(jsonPath("$[0].detalle.razonamiento").doesNotExist());
+
+		pasarElTiempoDelTestigo();
+		evaluador.barrer();
+
+		derivaciones(alerta.incidenteId())
+				.andExpect(jsonPath("$.length()").value(2))
+				.andExpect(jsonPath("$[1].condicion").value(ATRAPADA))
+				.andExpect(jsonPath("$[1].detalle.porQue").value("EL_TESTIGO_NO_CONTESTO"));
+		assertThat(ia.razonamientosPedidos()).isEmpty();
+	}
+
+	@Test
+	@DisplayName("PB-40 · CP-40-09 · con casos cerrados del mismo tipo de suceso el agente sí tiene con qué razonar")
+	void conCasosDelMismoTipo() throws Exception {
+		escenario.protocoloVigente();
+		ia.encenderRazonador();
+		Alerta anterior = escenario.alertarCon(escenario.ciudadano(), ACCIDENTE);
+		pedir(post("/incidentes/" + anterior.incidenteId() + "/cierre"), escenario.admin(),
+				Json.objeto("motivo", "ATENDIDO_EXTERNAMENTE")).andExpect(status().isNoContent());
+		Alerta actual = escenario.alertarCon(escenario.ciudadano(), ACCIDENTE);
+
+		evaluador.barrer();
+
+		razonamientos(actual.incidenteId())
+				.andExpect(jsonPath("$.length()").value(1))
+				.andExpect(jsonPath("$[0].condiciones[0].codigo").value(ATRAPADA))
+				.andExpect(jsonPath("$[0].condiciones[1].codigo").value(CONTRADICCION));
+		derivaciones(actual.incidenteId()).andExpect(jsonPath("$.length()").value(0));
+	}
+
+	@Test
+	@DisplayName("PB-40 · CP-40-10 · un «no sé» sin evidencia ya no queda en duda sin nada: con dos personas que alertaron va al agente, y si tampoco lo resuelve, a una persona")
+	void elNoSeSinEvidenciaVaAlAgente() throws Exception {
+		escenario.protocoloVigente();
+		ia.encenderRazonador();
+		Ciudadano uno = escenario.ciudadano();
+		Ciudadano otro = escenario.ciudadano();
+		Alerta deUno = escenario.alertarCon(uno, ACCIDENTE);
+		Alerta deOtro = escenario.alertarCon(otro, ACCIDENTE);
+		responder(uno, deUno, ATRAPADA, "NO_SE");
+		responder(otro, deOtro, ATRAPADA, "NO_SE");
+
+		evaluador.barrer();
+
+		razonamientos(deUno.incidenteId())
+				.andExpect(jsonPath("$.length()").value(1))
+				.andExpect(jsonPath("$[0].condiciones[0].codigo").value(ATRAPADA))
+				.andExpect(jsonPath("$[0].condiciones[0].paquete.porQue").value("EL_TESTIGO_NO_SABE"));
+
+		razonador.barrer();
+
+		derivaciones(deUno.incidenteId())
+				.andExpect(jsonPath("$[?(@.condicion == 'PERSONA_ATRAPADA')].detalle.porQue")
+						.value("EL_TESTIGO_NO_SABE"))
+				.andExpect(jsonPath("$[?(@.condicion == 'PERSONA_ATRAPADA')].detalle.razonamiento.justificacion")
+						.value("La información no alcanza."));
+	}
+
+	@Test
+	@DisplayName("PB-40 · CP-40-11 · en una condición roja el agente solo confirma: su «no se cumple» no se aplica y la decide una persona con el porqué del agente; en una que no es roja, se aplica")
+	void enUnaRojaElAgenteSoloConfirma() throws Exception {
+		escenario.publicarProtocolo(PROTOCOLO_CON_ROJA);
+		ia.encenderRazonador();
+		ia.concluir(NO_RESPIRA, ConclusionDelAgente.NO_CUMPLE, "En la foto la persona está sentada y habla.",
+				"evidencia: resumen de la foto");
+		ia.concluir(ATRAPADA, ConclusionDelAgente.NO_CUMPLE, "La foto muestra los dos autos vacíos.", "evidencia");
+		Ciudadano ciudadano = escenario.ciudadano();
+		Alerta alerta = escenario.alertarCon(ciudadano, ACCIDENTE);
+		pedir(post("/alertas/" + alerta.alertaId() + "/respuestas"), ciudadano.token(), "{\"respuestas\": ["
+				+ Json.objeto("condicion", NO_RESPIRA, "valor", "NO_SE") + ","
+				+ Json.objeto("condicion", ATRAPADA, "valor", "NO_SE") + "]}").andExpect(status().isOk());
+		otraEvidencia(ciudadano, alerta);
+		evaluador.barrer();
+
+		razonador.barrer();
+
+		derivaciones(alerta.incidenteId())
+				.andExpect(jsonPath("$.length()").value(1))
+				.andExpect(jsonPath("$[0].motivo").value("CONDICION_SIN_RESOLVER"))
+				.andExpect(jsonPath("$[0].condicion").value(NO_RESPIRA))
+				.andExpect(jsonPath("$[0].detalle.porQue").value("EL_AGENTE_NO_LA_CONFIRMA"))
+				.andExpect(jsonPath("$[0].detalle.condicion.prioridad").value("ROJA"))
+				.andExpect(jsonPath("$[0].detalle.razonamiento.veredicto").value("NO_CUMPLE"))
+				.andExpect(jsonPath("$[0].detalle.razonamiento.justificacion")
+						.value("En la foto la persona está sentada y habla."));
+		bitacora(alerta.incidenteId())
+				// El razonamiento queda entero en la bitácora, con las dos conclusiones.
+				.andExpect(jsonPath(RAZONADO + ".datos.conclusiones[0].condicion").value(NO_RESPIRA))
+				.andExpect(jsonPath(RAZONADO + ".datos.conclusiones[0].veredicto").value("NO_CUMPLE"))
+				// Pero solo queda decidida la que no es roja.
+				.andExpect(jsonPath(DECIDIDA + ".datos.condicion").value(ATRAPADA))
+				.andExpect(jsonPath(DECIDIDA + ".datos.cumple").value(false));
+
+		// La evaluación siguiente no le vuelve a pedir lo mismo al agente ni deriva otra vez.
+		evaluador.barrer();
+
+		assertThat(ia.razonamientosPedidos()).hasSize(1);
+		derivaciones(alerta.incidenteId()).andExpect(jsonPath("$.length()").value(1));
 	}
 
 	@Test
