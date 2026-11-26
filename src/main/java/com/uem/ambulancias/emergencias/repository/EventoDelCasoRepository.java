@@ -30,6 +30,10 @@ public interface EventoDelCasoRepository extends JpaRepository<EventoDelCaso, Lo
 	Optional<String> buscarUltimoTipoEntre(@Param("incidenteId") Long incidenteId,
 			@Param("tipos") Collection<String> tipos);
 
+	/** El id del renglón más nuevo del incidente entre esos tipos, o {@code null} si no tiene ninguno. */
+	@Query("select max(e.id) from EventoDelCaso e where e.incidente.id = :incidenteId and e.tipo in :tipos")
+	Long buscarUltimoIdEntre(@Param("incidenteId") Long incidenteId, @Param("tipos") Collection<String> tipos);
+
 	/** Los renglones de un tipo que salieron de esa alerta, en orden. {@code tipo} es el nombre del enum. */
 	List<EventoDelCaso> findByAlertaIdAndTipoOrderByIdAsc(Long alertaId, String tipo);
 

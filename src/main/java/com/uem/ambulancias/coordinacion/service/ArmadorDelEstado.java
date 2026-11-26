@@ -1,6 +1,7 @@
 package com.uem.ambulancias.coordinacion.service;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -49,6 +50,8 @@ public class ArmadorDelEstado {
 
 	static final String DECIDIDAS = "condicionesDecididas";
 
+	static final String PERSONAS = "personasQueAlertaron";
+
 	/** Cuántas frases de cada lista de un análisis se incluyen: más no suma y alarga el estado. */
 	private static final int MAXIMO_DE_FRASES = 8;
 
@@ -95,7 +98,7 @@ public class ArmadorDelEstado {
 		if (incidente.getCantidadAfectados() != null) {
 			estado.put(AFECTADOS, incidente.getCantidadAfectados());
 		}
-		estado.put("personasQueAlertaron", delIncidente.size() - retiradas.size());
+		estado.put(PERSONAS, delIncidente.size() - retiradas.size());
 		Map<String, String> respuestasDelTestigo = new LinkedHashMap<>();
 		respuestas.forEach((condicion, valor) -> respuestasDelTestigo.put(condicion, valor.name()));
 		estado.put(RESPUESTAS, respuestasDelTestigo);
@@ -129,6 +132,26 @@ public class ArmadorDelEstado {
 				!estado.path("evidencias").isEmpty(), decididas);
 	}
 
+	/** Cuántas personas con su alerta vigente había en un estado que ya se armó y se guardó. */
+	public static int personasQueAlertaron(JsonNode estado) {
+		return estado.path(PERSONAS).asInt(0);
+	}
+
+	/**
+	 * Si el renglón trae un dato del suceso que hace volver a mirar lo que decidió el agente. Una condición decidida no
+	 * cuenta: es una conclusión sobre los datos, no un dato.
+	 */
+	static boolean esDatoDelSuceso(TipoEventoDelCaso tipo) {
+		return tipo.aportaDatosDelSuceso() && tipo != TipoEventoDelCaso.CONDICION_DECIDIDA;
+	}
+
+	/** El último renglón del incidente con un dato del suceso, o {@code null} si todavía no tiene ninguno. */
+	public Long ultimoDatoDelSuceso(Long incidenteId) {
+		List<String> tipos = Arrays.stream(TipoEventoDelCaso.values()).filter(ArmadorDelEstado::esDatoDelSuceso)
+				.map(Enum::name).toList();
+		return eventos.buscarUltimoIdEntre(incidenteId, tipos);
+	}
+
 	/**
 	 * Las condiciones que ya se decidieron fuera de las reglas y del modelo. De cada una vale la última decisión. Lo
 	 * que decidió la central, o lo que se dio por cumplido ante la duda, vale hasta el final. Lo que resolvió el agente
@@ -141,7 +164,7 @@ public class ArmadorDelEstado {
 		long ultimoDato = -1;
 		for (EventoDelCaso evento : bitacora) {
 			if (evento.getTipo() != TipoEventoDelCaso.CONDICION_DECIDIDA) {
-				if (evento.getTipo().aportaDatosDelSuceso()) {
+				if (esDatoDelSuceso(evento.getTipo())) {
 					ultimoDato = evento.getId();
 				}
 				continue;
