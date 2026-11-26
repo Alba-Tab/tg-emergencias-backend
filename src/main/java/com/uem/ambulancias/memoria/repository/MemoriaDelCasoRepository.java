@@ -44,4 +44,14 @@ public interface MemoriaDelCasoRepository extends JpaRepository<MemoriaDelCaso, 
 
 	long countByVectorIsNotNull();
 
+	/**
+	 * Si hay algún incidente cerrado de ese tipo de suceso: son los casos que la memoria le muestra al agente, por
+	 * parecido si ya tienen su vector o por tipo de suceso si no.
+	 */
+	@Query("""
+			select count(i) > 0 from Incidente i
+			where i.tipoSuceso = :tipoSuceso and i.estado not in ('ACTIVO', 'EN_ATENCION')
+			""")
+	boolean existenCasosDelTipo(@Param("tipoSuceso") String tipoSuceso);
+
 }
