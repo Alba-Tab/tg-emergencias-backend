@@ -117,6 +117,14 @@ public class MemoriaDeCasos {
 		return List.copyOf(parecidos.subList(0, Math.min(Math.max(cuantos, 0), parecidos.size())));
 	}
 
+	/**
+	 * Si la memoria tiene algún caso del mismo tipo de suceso para mostrarle al agente. Cuentan todos los incidentes
+	 * cerrados de ese tipo, indexados o no: con la búsqueda por parecido apagada, el agente los recibe igual por tipo.
+	 */
+	public boolean hayCasosDelTipo(String tipoSuceso) {
+		return tipoSuceso != null && memorias.existenCasosDelTipo(tipoSuceso);
+	}
+
 	private Optional<ModeloDeEmbeddings> encendido() {
 		return Optional.ofNullable(modelo.getIfAvailable()).filter(ModeloDeEmbeddings::listoParaEmbeber);
 	}

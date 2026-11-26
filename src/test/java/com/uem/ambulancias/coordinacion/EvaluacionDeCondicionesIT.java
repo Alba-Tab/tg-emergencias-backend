@@ -117,8 +117,11 @@ class EvaluacionDeCondicionesIT extends PruebaIT {
 				.andExpect(jsonPath("$[0].veredictos[1].condicion").value(CONTRADICCION))
 				.andExpect(jsonPath("$[0].veredictos[1].resultado").value("EN_DUDA"));
 		bitacora(alerta.incidenteId())
-				// Después de la evaluación queda la pregunta que se le pide al testigo por la condición en duda.
-				.andExpect(jsonPath("$.length()").value(4))
+				// Después de la evaluación queda la pregunta que se le pide al testigo por la condición en duda, y la
+				// que no tiene pregunta se le pasa a una persona (PB-38).
+				.andExpect(jsonPath("$.length()").value(5))
+				.andExpect(jsonPath("$[4].tipo").value("DERIVADO_A_PERSONA"))
+				.andExpect(jsonPath("$[4].datos.condicion").value(CONTRADICCION))
 				.andExpect(jsonPath("$[3].tipo").value("PREGUNTA_AL_TESTIGO"))
 				.andExpect(jsonPath("$[2].tipo").value("CONDICIONES_EVALUADAS"))
 				.andExpect(jsonPath("$[2].origen").value("SISTEMA"))

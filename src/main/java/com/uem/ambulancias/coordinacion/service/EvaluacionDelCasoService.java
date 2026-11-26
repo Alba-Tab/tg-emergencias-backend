@@ -21,6 +21,7 @@ import com.uem.ambulancias.emergencias.service.BitacoraDelCaso;
 import com.uem.ambulancias.emergencias.service.FormularioDelCaso;
 import com.uem.ambulancias.emergencias.service.RecursosDelIncidente;
 import com.uem.ambulancias.evidencias.service.FalloDelServicioIa.Desenlace;
+import com.uem.ambulancias.memoria.service.MemoriaDeCasos;
 import com.uem.ambulancias.protocolo.domain.Condicion;
 import com.uem.ambulancias.protocolo.domain.TipoDeSuceso;
 
@@ -48,6 +49,7 @@ public class EvaluacionDelCasoService {
 	private final FormularioDelCaso formulario;
 	private final Derivaciones derivaciones;
 	private final RazonamientoDelCasoService razonamientos;
+	private final MemoriaDeCasos memoria;
 	private final DerivacionProperties tiempos;
 	private final CoordinacionProperties config;
 	private final JsonMapper json;
@@ -230,21 +232,23 @@ public class EvaluacionDelCasoService {
 	 *
 	 * <ul>
 	 * <li>una condición cumplida que el protocolo marca para que la vea una persona;</li>
-	 * <li>una condición en duda o sin evaluar para la que ya no queda a quién preguntarle: el testigo no contestó a
-	 * tiempo, o no hay pregunta o dijo que no sabe y hay una evidencia que una persona puede mirar.</li>
+	 * <li>una condición en duda o sin evaluar que nadie pudo resolver: el testigo no contestó a tiempo o dijo que no
+	 * sabe, o no hay pregunta y el modelo la dejó en duda o hay una evidencia que mirar (ver
+	 * {@link LoQueNoSeResuelve#pendiente}).</li>
 	 * </ul>
 	 *
 	 * <p>Mientras el testigo todavía tiene tiempo de contestar no se deriva: se programa otra evaluación para cuando
 	 * se le acabe, que es la que va a notar que no contestó.
 	 *
-	 * <p>Con el agente encendido, las condiciones sin resolver pasan antes por él (PB-40): se le pide un razonamiento,
-	 * y a la persona le llega solo lo que el agente tampoco pudo resolver.
+	 * <p>Con el agente encendido y algo con qué razonar, las condiciones sin resolver pasan antes por él (PB-40), sin
+	 * esperar al testigo: se le pide el razonamiento al mismo tiempo que la respuesta. A la persona le llega solo lo
+	 * que el agente tampoco pudo resolver, y lo que el agente ya miró sin datos nuevos no se le vuelve a pedir.
 	 */
 	private void derivarLoQueNoSeResuelve(EvaluacionDelCaso evaluacion, Incidente incidente, TipoDeSuceso tipo,
 			List<Veredicto> veredictos, JuicioDelProtocolo.Hechos hechos, Instant ahora) {
 		Map<String, Instant> pedidas = formulario.pedidasDesde(incidente.getId());
-		Map<String, Map<String, Object>> sinResolver = new LinkedHashMap<>();
-		Instant proximaRevision = null;
+		Map<String, Veredicto> sinResolver = new LinkedHashMap<>();
+		List<LoQueNoSeResuelve.Pendiente> pendientes = new ArrayList<>();
 		for (Veredicto veredicto : veredictos) {
 			Condicion condicion = tipo.buscarCondicion(veredicto.condicion()).orElseThrow();
 			if (veredicto.cumplida()) {
@@ -255,44 +259,53 @@ public class EvaluacionDelCasoService {
 				}
 				continue;
 			}
-			if (veredicto.resultado() == ResultadoDeCondicion.NO_CUMPLIDA) {
-				continue;
-			}
-			String porQue;
-			if (condicion.getPregunta() != null && veredicto.respuestaDelTestigo() == null) {
-				Instant limite = pedidas.getOrDefault(condicion.getCodigo(), ahora).plus(tiempos.esperaDelTestigo());
-				if (ahora.isBefore(limite)) {
-					proximaRevision = proximaRevision == null || limite.isBefore(proximaRevision) ? limite
-							: proximaRevision;
-					continue;
-				}
-				porQue = "EL_TESTIGO_NO_CONTESTO";
-			} else if (hechos.hayEvidenciaUtil()) {
-				porQue = condicion.getPregunta() == null ? "SIN_PREGUNTA_PARA_EL_TESTIGO" : "EL_TESTIGO_NO_SABE";
-			} else {
-				// Sin pregunta posible y sin ninguna evidencia, una persona tampoco tendría con qué decidir.
-				continue;
-			}
-			if (!derivaciones.yaDerivado(incidente.getId(), clave(MotivoDeDerivacion.CONDICION_SIN_RESOLVER, condicion))) {
-				sinResolver.put(condicion.getCodigo(), paquete(condicion, veredicto, porQue));
+			LoQueNoSeResuelve.Pendiente pendiente = LoQueNoSeResuelve.pendiente(condicion, veredicto,
+					hechos.hayEvidenciaUtil(), pedidas.get(condicion.getCodigo()), ahora, tiempos.esperaDelTestigo());
+			if (pendiente != null && !derivaciones.yaDerivado(incidente.getId(),
+					clave(MotivoDeDerivacion.CONDICION_SIN_RESOLVER, condicion))) {
+				pendientes.add(pendiente);
+				sinResolver.put(condicion.getCodigo(), veredicto);
 			}
 		}
-		if (proximaRevision != null) {
-			cola.pedirParaDespues(incidente, "ESPERA_DE_RESPUESTA", proximaRevision);
-		}
-		if (sinResolver.isEmpty()) {
+		if (pendientes.isEmpty()) {
 			return;
 		}
-		if (razonamientos.disponible()) {
-			// Si ya hay un razonamiento en vuelo, alcanza con ese: cuando termine, el caso se vuelve a evaluar.
-			if (!razonamientos.hayEnVuelo(incidente.getId())) {
-				razonamientos.pedir(incidente, evaluacion, sinResolver);
+		Map<String, RazonamientoDelCasoService.LoQueDijoElAgente> yaMiradas =
+				razonamientos.yaMiradasSinResolver(incidente.getId(), tipo);
+		boolean puedeRazonar = razonamientos.disponible() && LoQueNoSeResuelve.hayAlgoQueRazonar(
+				hechos.hayEvidenciaUtil(),
+				ArmadorDelEstado.personasQueAlertaron(json.readTree(evaluacion.getEstadoDelCaso())),
+				() -> memoria.hayCasosDelTipo(tipo.getCodigo()));
+		LoQueNoSeResuelve.Reparto reparto = LoQueNoSeResuelve.repartir(pendientes, yaMiradas.keySet(), puedeRazonar);
+		if (reparto.proximaRevision() != null) {
+			cola.pedirParaDespues(incidente, "ESPERA_DE_RESPUESTA", reparto.proximaRevision());
+		}
+		for (LoQueNoSeResuelve.Pendiente pendiente : reparto.aDerivar()) {
+			Condicion condicion = tipo.buscarCondicion(pendiente.codigo()).orElseThrow();
+			RazonamientoDelCasoService.LoQueDijoElAgente dijo = yaMiradas.get(pendiente.codigo());
+			String porQue = dijo != null && dijo.porQue() != null ? dijo.porQue() : pendiente.porQue();
+			Map<String, Object> paquete = paquete(condicion, sinResolver.get(pendiente.codigo()), porQue);
+			if (dijo != null) {
+				paquete.put("razonamiento", dijo.razonamiento());
 			}
+			derivaciones.derivar(incidente, MotivoDeDerivacion.CONDICION_SIN_RESOLVER,
+					clave(MotivoDeDerivacion.CONDICION_SIN_RESOLVER, condicion), pendiente.codigo(), paquete,
+					evaluacion);
+		}
+		// Si ya hay un razonamiento en vuelo, alcanza con ese: cuando termine, el caso se vuelve a evaluar.
+		if (reparto.aRazonar().isEmpty() || razonamientos.hayEnVuelo(incidente.getId())) {
 			return;
 		}
-		sinResolver.forEach((codigo, paquete) -> derivaciones.derivar(incidente,
-				MotivoDeDerivacion.CONDICION_SIN_RESOLVER, MotivoDeDerivacion.CONDICION_SIN_RESOLVER.name() + ":" + codigo,
-				codigo, paquete, evaluacion));
+		Map<String, Map<String, Object>> paquetes = new LinkedHashMap<>();
+		Map<String, Instant> esperas = new LinkedHashMap<>();
+		for (LoQueNoSeResuelve.Pendiente pendiente : reparto.aRazonar()) {
+			Condicion condicion = tipo.buscarCondicion(pendiente.codigo()).orElseThrow();
+			paquetes.put(pendiente.codigo(), paquete(condicion, sinResolver.get(pendiente.codigo()), pendiente.porQue()));
+			if (pendiente.esperaAlTestigo()) {
+				esperas.put(pendiente.codigo(), pendiente.esperaHasta());
+			}
+		}
+		razonamientos.pedir(incidente, evaluacion, paquetes, esperas);
 	}
 
 	private static String clave(MotivoDeDerivacion motivo, Condicion condicion) {

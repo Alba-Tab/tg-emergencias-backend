@@ -18,6 +18,7 @@ import com.uem.ambulancias.coordinacion.service.EvaluadorDeCasos;
 import com.uem.ambulancias.coordinacion.service.PedidoDeEvaluacion;
 import com.uem.ambulancias.coordinacion.service.VencimientoDeDerivaciones;
 import com.uem.ambulancias.evidencias.service.AnalizadorDeEvidencias;
+import com.uem.ambulancias.evidencias.service.FalloDelServicioIa.Desenlace;
 import com.uem.ambulancias.soporte.Escenario;
 import com.uem.ambulancias.soporte.Escenario.Alerta;
 import com.uem.ambulancias.soporte.Escenario.Ciudadano;
@@ -107,6 +108,8 @@ class DerivacionIT extends PruebaIT {
 
 	/** Deja una condición en duda derivada porque el testigo no contestó. Devuelve el id de la derivación. */
 	private long derivarPorFaltaDeRespuesta(Alerta alerta) throws Exception {
+		// Las fuentes no se contradicen: así la única condición en duda es la que tiene pregunta.
+		ia.responderProbabilidad(CONTRADICCION, 0.1);
 		evaluador.barrer();
 		deIncidente(alerta.incidenteId()).andExpect(jsonPath("$.length()").value(0));
 		pasarElTiempoDelTestigo();
@@ -410,28 +413,55 @@ class DerivacionIT extends PruebaIT {
 	}
 
 	@Test
-	@DisplayName("PB-38 · CP-38-09 · una condición en duda sin a quién preguntarle solo se deriva si hay una evidencia que una persona pueda mirar")
-	void soloConEvidencia() throws Exception {
+	@DisplayName("PB-38 · CP-38-09 · un «no sé» del testigo se le pasa a una persona aunque no haya evidencia: puede llamarlo")
+	void elNoSeSinEvidencia() throws Exception {
 		escenario.protocoloVigente();
 		Ciudadano ciudadano = escenario.ciudadano();
 		Alerta alerta = escenario.alertarCon(ciudadano, ACCIDENTE);
 		responder(ciudadano, alerta, ATRAPADA, "NO_SE");
+		ia.fallarEvaluaciones("provider_misconfigured", Desenlace.REVISION);
 
-		// Sin ninguna evidencia, una persona tampoco tendría con qué decidir: no se deriva nada.
 		evaluador.barrer();
-		deIncidente(alerta.incidenteId()).andExpect(jsonPath("$.length()").value(0));
 
-		ia.analizarCon(ANALISIS_UTIL);
-		escenario.evidenciaSubida(ciudadano, alerta.alertaId(), "image/jpeg");
-		analizador.barrer();
+		// Sin el modelo, la condición sin pregunta queda sin evaluar y, sin evidencia, no hay nada que pasarle a nadie.
+		deIncidente(alerta.incidenteId())
+				.andExpect(jsonPath("$.length()").value(1))
+				.andExpect(jsonPath("$[0].motivo").value("CONDICION_SIN_RESOLVER"))
+				.andExpect(jsonPath("$[0].condicion").value(ATRAPADA))
+				.andExpect(jsonPath("$[0].detalle.porQue").value("EL_TESTIGO_NO_SABE"))
+				.andExpect(jsonPath("$[0].detalle.veredicto.respuestaDelTestigo").value("NO_SE"));
+
+		// Con el modelo de vuelta, la que no tiene pregunta queda en duda: no hay testigo a quien preguntarle, así que
+		// pregunta una persona.
+		ia.repararEvaluaciones();
+		pedir(post("/alertas/" + alerta.alertaId() + "/detalles"), ciudadano.token(),
+				Json.objeto("cantidadAfectados", 1)).andExpect(status().isOk());
 		evaluador.barrer();
 
 		deIncidente(alerta.incidenteId())
 				.andExpect(jsonPath("$.length()").value(2))
-				.andExpect(jsonPath("$[0].motivo").value("CONDICION_SIN_RESOLVER"))
+				.andExpect(jsonPath("$[1].condicion").value(CONTRADICCION))
+				.andExpect(jsonPath("$[1].detalle.porQue").value("SIN_PREGUNTA_PARA_EL_TESTIGO"))
+				.andExpect(jsonPath("$[1].detalle.veredicto.resultado").value("EN_DUDA"));
+	}
+
+	@Test
+	@DisplayName("PB-38 · CP-38-12 · con una evidencia que mirar, lo que el testigo no sabe y lo que no tiene pregunta se le pasa a una persona")
+	void conEvidencia() throws Exception {
+		escenario.protocoloVigente();
+		Ciudadano ciudadano = escenario.ciudadano();
+		Alerta alerta = escenario.alertarCon(ciudadano, ACCIDENTE);
+		responder(ciudadano, alerta, ATRAPADA, "NO_SE");
+		ia.analizarCon(ANALISIS_UTIL);
+		escenario.evidenciaSubida(ciudadano, alerta.alertaId(), "image/jpeg");
+		analizador.barrer();
+
+		evaluador.barrer();
+
+		deIncidente(alerta.incidenteId())
+				.andExpect(jsonPath("$.length()").value(2))
 				.andExpect(jsonPath("$[0].condicion").value(ATRAPADA))
 				.andExpect(jsonPath("$[0].detalle.porQue").value("EL_TESTIGO_NO_SABE"))
-				.andExpect(jsonPath("$[0].detalle.veredicto.respuestaDelTestigo").value("NO_SE"))
 				.andExpect(jsonPath("$[1].condicion").value(CONTRADICCION))
 				.andExpect(jsonPath("$[1].detalle.porQue").value("SIN_PREGUNTA_PARA_EL_TESTIGO"));
 	}
@@ -440,6 +470,7 @@ class DerivacionIT extends PruebaIT {
 	@DisplayName("PB-38 · CP-38-10 · si el testigo contesta a tiempo, no hace falta ninguna persona")
 	void elTestigoContestaATiempo() throws Exception {
 		escenario.protocoloVigente();
+		ia.responderProbabilidad(CONTRADICCION, 0.1);
 		Ciudadano ciudadano = escenario.ciudadano();
 		Alerta alerta = escenario.alertarCon(ciudadano, ACCIDENTE);
 		evaluador.barrer();
